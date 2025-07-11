@@ -42567,7 +42567,7 @@ async function commitAndPush(dir, msg, version) {
   await git.commit(msg);
   await git.push();
   if (version) {
-    console.log(`Tagging ${version}`);
+    core.info(`Tagging ${version}`);
     await git.tag(`v${version}`);
     await git.pushTags('origin');
   }
@@ -42667,7 +42667,7 @@ async function main() {
       core.setFailed(`Test failures in: ${testFailures.join(', ')}`);
       process.exit(1);
     }
-    console.log('Version bump action completed successfully.');
+    core.info('Version bump action completed successfully.');
   } catch (err) {
     core.setFailed(err.message);
     process.exit(1);
