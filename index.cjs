@@ -171,6 +171,9 @@ async function main() {
     const rootPkg = await readJSON(path.join(rootDir, 'package.json'));
     const packageManager = (await fs.stat(path.join(rootDir, 'yarn.lock')).catch(() => false)) ? 'yarn' : 'npm';
 
+    await git.addConfig('user.name', 'github-actions[bot]');
+    await git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com');
+
     // 1. Discover all packages
     const pkgDirs = await getPackageDirs(rootPkg);
     // 2. Build dependency graph
