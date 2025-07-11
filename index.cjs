@@ -244,13 +244,11 @@ async function main() {
         if (bumped[name].bumpType === 'major') rootBump = 'major';
         else if (bumped[name].bumpType === 'minor' && rootBump !== 'major') rootBump = 'minor';
       }
-      if (rootBump !== 'patch') {
-        rootPkg.version = bumpVersion(rootPkg.version, rootBump);
-        await writeJSON(path.join(rootDir, 'package.json'), rootPkg);
-        const msg = interpolate(commitMsgTemplate, { package: rootPkg.name || 'root', version: rootPkg.version, bumpType: rootBump });
-        const version = tagVersion ? rootPkg.version : undefined;
-        await commitAndPush(rootDir, msg, version);
-      }
+      rootPkg.version = bumpVersion(rootPkg.version, rootBump);
+      await writeJSON(path.join(rootDir, 'package.json'), rootPkg);
+      const msg = interpolate(commitMsgTemplate, { package: rootPkg.name || 'root', version: rootPkg.version, bumpType: rootBump });
+      const version = tagVersion ? rootPkg.version : undefined;
+      await commitAndPush(rootDir, msg, version);
     }
 
     // 8. Handle test failures
