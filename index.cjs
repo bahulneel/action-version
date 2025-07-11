@@ -173,6 +173,14 @@ async function main() {
 
     await git.addConfig('user.name', 'github-actions[bot]');
     await git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com');
+    const branchInput = core.getInput('branch');
+    const branch =
+      branchInput ||
+      process.env.GITHUB_HEAD_REF ||
+      process.env.GITHUB_REF_NAME ||
+      'main'; // fallback
+
+    await git.checkout(branch);
 
     // 1. Discover all packages
     const pkgDirs = await getPackageDirs(rootPkg);
