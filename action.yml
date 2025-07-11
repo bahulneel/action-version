@@ -10,6 +10,10 @@ inputs:
     description: "Commit message template for dependency updates."
     required: false
     default: "chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)"
+  tag-version:
+    description: "Whether to tag the version."
+    required: false
+    default: "false"
 runs:
   using: "node20"
   main: "dist/index.cjs"
