@@ -1,0 +1,18 @@
+name: "Monorepo Version Bump Action"
+description: "Automatically bumps versions and updates dependencies in a monorepo or single-package repo using Conventional Commits."
+author: "bahulneel"
+inputs:
+  commit-message-template:
+    description: "Commit message template for version bumps."
+    required: false
+    default: "chore(release): bump ${package} to ${version} (${bumpType})"
+  dep-commit-message-template:
+    description: "Commit message template for dependency updates."
+    required: false
+    default: "chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)"
+runs:
+  using: "node20"
+  main: "index.js"
+branding:
+  icon: "git-commit"
+  color: "blue"
