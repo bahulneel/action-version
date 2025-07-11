@@ -4,7 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { execSync, spawnSync } from 'child_process';
 import simpleGit from 'simple-git';
-import glob from 'glob';
+import { globSync } from 'glob';
 import conventionalCommitsParser from 'conventional-commits-parser';
 
 const git = simpleGit();
@@ -77,7 +77,7 @@ async function getPackageDirs(rootPkg) {
       : rootPkg.workspaces.packages;
     const dirs = new Set();
     for (const pattern of patterns) {
-      for (const match of glob.sync(pattern, { cwd: process.cwd(), absolute: true })) {
+      for (const match of globSync(pattern, { cwd: process.cwd(), absolute: true })) {
         // Only include dirs with package.json
         try {
           await fs.access(path.join(match, 'package.json'));
