@@ -42584,9 +42584,9 @@ async function runTest(dir, packageManager) {
 
 async function main() {
   try {
-    const commitMsgTemplate = core.getInput('commit-message-template') || 'chore(release): bump ${package} to ${version} (${bumpType})';
-    const depCommitMsgTemplate = core.getInput('dep-commit-message-template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)';
-    const tagVersion = core.getInput('tag-version') === 'true';
+    const commitMsgTemplate = core.getInput('commit_message_template') || 'chore(release): bump ${package} to ${version} (${bumpType})';
+    const depCommitMsgTemplate = core.getInput('dep_commit_message_template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)';
+    const tagVersion = core.getInput('tag_version') === 'true';
     const rootDir = process.cwd();
     const rootPkg = await readJSON(path.join(rootDir, 'package.json'));
     const packageManager = (await fs.stat(path.join(rootDir, 'yarn.lock')).catch(() => false)) ? 'yarn' : 'npm';
