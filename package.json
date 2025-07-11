@@ -1,6 +1,6 @@
 {
   "name": "action-version",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "GitHub Action for automated version bumping and dependency management in monorepos using Conventional Commits.",
   "main": "dist/index.cjs",
   "type": "module",
