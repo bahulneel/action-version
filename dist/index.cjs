@@ -42471,6 +42471,12 @@ function getMostSignificantBump(commits) {
   return bump;
 }
 
+function bumpPriority(type) {
+  if (type === 'major') return 3;
+  if (type === 'minor') return 2;
+  return 1;
+}
+
 function parseCommits(log) {
   const commits = [];
   for (const entry of log.split(/^commit /gm).slice(1)) {
@@ -42617,15 +42623,26 @@ async function main() {
       const { dir, pkg } = graph[name];
       const lastTag = await getLastTag(pkg.name);
       const commits = await getCommitsAffecting(dir, lastTag);
-      const bumpType = getMostSignificantBump(commits);
-      if (bumpType === 'patch' && commits.length === 0) continue; // No changes
-      const newVersion = bumpVersion(pkg.version, bumpType);
+      const requiredBump = getMostSignificantBump(commits);
+      // Detect if a version bump has already been made
+      let lastBumpType = null;
+      const bumpCommit = commits.find(c => /chore\(release\): bump/.test(c.header));
+      if (bumpCommit) {
+        const match = bumpCommit.header.match(/\((major|minor|patch)\)/);
+        if (match) lastBumpType = match[1];
+      }
+      // If the required bump is less than or equal to the last bump, skip
+      if (lastBumpType && bumpPriority(requiredBump) <= bumpPriority(lastBumpType)) {
+        continue; // Skip bumping this package
+      }
+      if (requiredBump === 'patch' && commits.length === 0) continue; // No changes
+      const newVersion = bumpVersion(pkg.version, requiredBump);
       pkg.version = newVersion;
       await writeJSON(path.join(dir, 'package.json'), pkg);
-      const msg = interpolate(commitMsgTemplate, { package: pkg.name, version: newVersion, bumpType });
+      const msg = interpolate(commitMsgTemplate, { package: pkg.name, version: newVersion, bumpType: requiredBump });
       const version = tagVersion && !rootPkg.workspaces ? newVersion : undefined;
       await commitAndPush(dir, msg, version);
-      bumped[name] = { version: newVersion, bumpType };
+      bumped[name] = { version: newVersion, bumpType: requiredBump };
     }
 
     // 6. For each dependent, update dependency, patch bump, commit, push, run tests if breaking
