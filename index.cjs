@@ -198,6 +198,7 @@ async function main() {
     const bumped = {};
     let testFailures = [];
 
+    let bumpedCount = 0;
     // 5. For each package, determine bump, update, commit, push
     for (const name of order) {
       const { dir, pkg } = graph[name];
@@ -224,6 +225,7 @@ async function main() {
       const version = tagVersion && !rootPkg.workspaces ? newVersion : undefined;
       await commitAndPush(dir, msg, version);
       bumped[name] = { version: newVersion, bumpType: requiredBump };
+      bumpedCount++;
     }
 
     // 6. For each dependent, update dependency, patch bump, commit, push, run tests if breaking
@@ -255,7 +257,7 @@ async function main() {
     }
 
     // 7. Aggregate and bump meta-package if needed
-    if (rootPkg.workspaces) {
+    if (rootPkg.workspaces && bumpedCount > 0) {
       // Aggregate most significant bump
       let rootBump = 'patch';
       for (const name in bumped) {
