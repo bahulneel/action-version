@@ -42633,6 +42633,7 @@ async function main() {
       }
       // If the required bump is less than or equal to the last bump, skip
       if (lastBumpType && bumpPriority(requiredBump) <= bumpPriority(lastBumpType)) {
+        core.info(`Skipping ${pkg.name} because it has already been bumped to ${lastBumpType}`);
         continue; // Skip bumping this package
       }
       if (requiredBump === 'patch' && commits.length === 0) continue; // No changes
