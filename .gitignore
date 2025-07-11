@@ -17,6 +17,3 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
-
-# Build output (if using a build step)
-dist/ 
