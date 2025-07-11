@@ -42562,11 +42562,14 @@ async function getLastTag(pkgName) {
   }
 }
 
-async function commitAndPush(dir, msg) {
+async function commitAndPush(dir, msg, version) {
   await git.add([path.join(dir, 'package.json')]);
   await git.commit(msg);
   await git.push();
-  await git.pushTags('origin');
+  if (version) {
+    await git.tag(`v${version}`);
+    await git.pushTags('origin');
+  }
 }
 
 async function runTest(dir, packageManager) {
@@ -42582,6 +42585,7 @@ async function main() {
   try {
     const commitMsgTemplate = core.getInput('commit-message-template') || 'chore(release): bump ${package} to ${version} (${bumpType})';
     const depCommitMsgTemplate = core.getInput('dep-commit-message-template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)';
+    const tagVersion = core.getInput('tag-version') === 'true';
     const rootDir = process.cwd();
     const rootPkg = await readJSON(path.join(rootDir, 'package.json'));
     const packageManager = (await fs.stat(path.join(rootDir, 'yarn.lock')).catch(() => false)) ? 'yarn' : 'npm';
@@ -42607,7 +42611,8 @@ async function main() {
       pkg.version = newVersion;
       await writeJSON(path.join(dir, 'package.json'), pkg);
       const msg = interpolate(commitMsgTemplate, { package: pkg.name, version: newVersion, bumpType });
-      await commitAndPush(dir, msg);
+      const version = tagVersion && !rootPkg.workspaces ? newVersion : undefined;
+      await commitAndPush(dir, msg, version);
       bumped[name] = { version: newVersion, bumpType };
     }
 
@@ -42651,7 +42656,8 @@ async function main() {
         rootPkg.version = bumpVersion(rootPkg.version, rootBump);
         await writeJSON(path.join(rootDir, 'package.json'), rootPkg);
         const msg = interpolate(commitMsgTemplate, { package: rootPkg.name || 'root', version: rootPkg.version, bumpType: rootBump });
-        await commitAndPush(rootDir, msg);
+        const version = tagVersion ? rootPkg.version : undefined;
+        await commitAndPush(rootDir, msg, version);
       }
     }
 
