@@ -2,14 +2,14 @@
   "name": "action-version",
   "version": "0.4.0",
   "description": "GitHub Action for automated version bumping and dependency management in monorepos using Conventional Commits.",
-  "main": "dist/index.js",
+  "main": "dist/index.cjs",
   "type": "module",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
-    "build": "ncc build index.js -o dist"
+    "build": "ncc build index.cjs -o dist"
   },
   "dependencies": {
     "conventional-commits-parser": "^4.0.0",

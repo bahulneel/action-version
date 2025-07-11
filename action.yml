@@ -12,7 +12,7 @@ inputs:
     default: "chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)"
 runs:
   using: "node20"
-  main: "dist/index.js"
+  main: "dist/index.cjs"
 branding:
   icon: "git-commit"
   color: "blue"

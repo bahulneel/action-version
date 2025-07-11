@@ -1,11 +1,11 @@
 // index.js
-import core from '@actions/core';
-import fs from 'fs/promises';
-import path from 'path';
-import { execSync, spawnSync } from 'child_process';
-import simpleGit from 'simple-git';
-import { globSync } from 'glob';
-import conventionalCommitsParser from 'conventional-commits-parser';
+const core = require('@actions/core');
+const fs = require('fs/promises');
+const path = require('path');
+const { execSync, spawnSync } = require('child_process');
+const simpleGit = require('simple-git');
+const { globSync } = require('glob');
+const conventionalCommitsParser = require('conventional-commits-parser');
 
 const git = simpleGit();
 
