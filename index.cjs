@@ -212,7 +212,7 @@ async function main() {
         if (match) lastBumpType = match[1];
       }
       // If the required bump is less than or equal to the last bump, skip
-      if (lastBumpType && bumpPriority(requiredBump) <= bumpPriority(lastBumpType)) {
+      if (!tagVersion && lastBumpType && bumpPriority(requiredBump) <= bumpPriority(lastBumpType)) {
         core.info(`Skipping ${pkg.name} because it has already been bumped to ${lastBumpType}`);
         continue; // Skip bumping this package
       }
