@@ -146,6 +146,7 @@ async function commitAndPush(dir, msg) {
   await git.add([path.join(dir, 'package.json')]);
   await git.commit(msg);
   await git.push();
+  await git.push(['--tags']);
 }
 
 async function runTest(dir, packageManager) {
