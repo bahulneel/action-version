@@ -42567,6 +42567,7 @@ async function commitAndPush(dir, msg, version) {
   await git.commit(msg);
   await git.push();
   if (version) {
+    console.log(`Tagging ${version}`);
     await git.tag(`v${version}`);
     await git.pushTags('origin');
   }
