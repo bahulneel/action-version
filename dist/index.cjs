@@ -42627,7 +42627,7 @@ async function main() {
       const lastTag = await getLastTag(pkg.name);
       const commits = await getCommitsAffecting(dir, lastTag);
       const requiredBump = getMostSignificantBump(commits);
-      const tagVersion = !rootPkg.workspaces;
+      const shouldTagVersion = !rootPkg.workspaces;
       // Detect if a version bump has already been made
       let lastBumpType = null;
       const bumpCommit = commits.find(c => /chore\(release\): bump/.test(c.header));
@@ -42636,7 +42636,7 @@ async function main() {
         if (match) lastBumpType = match[1];
       }
       // If the required bump is less than or equal to the last bump, skip
-      if (!tagVersion && lastBumpType && bumpPriority(requiredBump) <= bumpPriority(lastBumpType)) {
+      if (!shouldTagVersion && lastBumpType && bumpPriority(requiredBump) <= bumpPriority(lastBumpType)) {
         core.info(`Skipping ${pkg.name} because it has already been bumped to ${lastBumpType}`);
         continue; // Skip bumping this package
       }
@@ -42646,7 +42646,7 @@ async function main() {
       await writeJSON(path.join(dir, 'package.json'), pkg);
       const msg = interpolate(commitMsgTemplate, { package: pkg.name, version: newVersion, bumpType: requiredBump });
       await commitAndPush(dir, msg);
-      if (tagVersion) await tagVersion(lastTag, newVersion);
+      if (shouldTagVersion) await tagVersion(lastTag, newVersion);
       bumped[name] = { version: newVersion, bumpType: requiredBump };
       bumpedCount++;
     }
