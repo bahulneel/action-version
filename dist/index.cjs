@@ -46631,23 +46631,26 @@ async function main() {
 
     // 7. Aggregate and bump meta-package if needed
     if (rootPkg.workspaces) {
-      core.info(`[root] Bumping root package`);
-      // Aggregate most significant bump
-      let rootBump = 'patch';
-      for (const name in bumped) {
-        if (bumped[name].bumpType === 'major') rootBump = 'major';
-        else if (bumped[name].bumpType === 'minor' && rootBump !== 'major') rootBump = 'minor';
+      async function bumpRoot() {
+        core.info(`[root] Bumping root package`);
+        // Aggregate most significant bump
+        let rootBump = 'patch';
+        for (const name in bumped) {
+          if (bumped[name].bumpType === 'major') rootBump = 'major';
+          else if (bumped[name].bumpType === 'minor' && rootBump !== 'major') rootBump = 'minor';
+        }
+        const commits = await getCommitsAffecting(rootDir + '/package.json', lastTag);
+        const alreadyBumped = await hasAlreadyBumped(commits, rootBump);
+        if (alreadyBumped) {
+          core.info(`[root] Skipping root package because it has already been bumped to ${rootBump}`);
+          return;
+        }
+        rootPkg.version = bumpVersion(rootPkg.version, rootBump);
+        await writeJSON(path.join(rootDir, 'package.json'), rootPkg);
+        const msg = interpolate(commitMsgTemplate, { package: rootPkg.name || 'root', version: rootPkg.version, bumpType: rootBump });
+        await commitAndPush(rootDir, msg);
       }
-      const commits = await getCommitsAffecting(rootDir + '/package.json', lastTag);
-      const alreadyBumped = await hasAlreadyBumped(commits, rootBump);
-      if (alreadyBumped) {
-        core.info(`[root] Skipping root package because it has already been bumped to ${rootBump}`);
-        return;
-      }
-      rootPkg.version = bumpVersion(rootPkg.version, rootBump);
-      await writeJSON(path.join(rootDir, 'package.json'), rootPkg);
-      const msg = interpolate(commitMsgTemplate, { package: rootPkg.name || 'root', version: rootPkg.version, bumpType: rootBump });
-      await commitAndPush(rootDir, msg);
+      await bumpRoot()
     } else if (rootPkg.name && rootPkg.name in bumped) {
       core.info(`[root] Root was bumped in a previous step`);
       rootPkg.version = bumped[rootPkg.name].version;
