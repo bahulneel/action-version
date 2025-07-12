@@ -46559,8 +46559,18 @@ async function main() {
     if (branchTarget) {
       core.info(`[root] Checking out ${branchTarget}`);
       await git.checkout(branchTarget);
-      lastTargetCommit = await git.log(['-n1', '--no-patch']).latest;
-      core.info(`[root] Last commit in ${branchTarget}: ${lastTargetCommit.hash}`);
+      const commits = await git.log();
+      if (!commits.latest) {
+        core.error(`[root] No commits found in ${branchTarget}`);
+        process.exit(1);
+      }
+      const commit = commits.latest;
+      if (!commit) {
+        core.error(`[root] No commits found in ${branchTarget}`);
+        process.exit(1);
+      }
+      core.info(`[root] Last commit in ${branchTarget}: ${commit.hash}`);
+      lastTargetCommit = commit.hash;
     }
 
     const branch =
