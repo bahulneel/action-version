@@ -46710,7 +46710,7 @@ async function main() {
     exitCode = 1;
   } finally {
     if (targetBranch) {
-      await git.push(['--set-upstream', targetBranch, `origin/${targetBranch}`]);
+      await git.push(['--set-upstream', 'origin', targetBranch]);
     } else {
       await git.push();
     }
