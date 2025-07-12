@@ -196,6 +196,7 @@ function guessBumpType(version) {
 
 async function main() {
   let exitCode = 0;
+  let targetBranch = undefined;
   try {
     const commitMsgTemplate = core.getInput('commit_message_template') || 'chore(release): bump ${package} to ${version} (${bumpType})';
     const depCommitMsgTemplate = core.getInput('dep_commit_message_template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)';
@@ -209,7 +210,7 @@ async function main() {
     const branchTemplate = core.getInput('branch_template') || 'release/${version}';
     const templateRegex = new RegExp(branchTemplate.replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'));
     const branchDeletion = core.getInput('branch_deletion') || 'keep';
-    let targetBranch = shouldCreateBranch ? interpolate(branchTemplate, {
+    targetBranch = shouldCreateBranch ? interpolate(branchTemplate, {
       version: 'PENDING'
     }) : undefined;
     const branch =
