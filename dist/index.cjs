@@ -46468,7 +46468,7 @@ async function getCommitsAffecting(dir, sinceRef) {
   let range = sinceRef ? `${sinceRef}..HEAD` : 'HEAD';
   const log = execSync(`git log ${range} --pretty=medium -- ${dir}`, { encoding: 'utf8' });
   const commits = parseCommits(log);
-  core.info(`[${dir}] ${commits.length} commits affecting since ${sinceRef}`);
+  core.info(`[${path.relative(process.cwd(), dir)}] ${commits.length} commits affecting since ${sinceRef}`);
   return commits;
 }
 
@@ -46509,7 +46509,7 @@ async function runTest(dir, packageManager) {
 async function lastVersionChange(git, file) {
   // Return the git tag or sha of the last commit as a reference to the version
   const commits = await git.log(['-L', `/version/:${file}`, '-n1', '--no-patch']);
-  core.info(`[${file}] Last version change: ${commits.latest.hash}`);
+  core.info(`[${path.relative(process.cwd(), file)}] Last version change: ${commits.latest.hash}`);
   return commits.latest.hash;
 }
 
