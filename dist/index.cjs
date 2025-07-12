@@ -46701,9 +46701,9 @@ async function main() {
           }
         }
       }
+    } else {
+      await tagVersion(lastTag, rootPkg.version);
     }
-    await tagVersion(lastTag, rootPkg.version);
-
     core.info('Version bump action completed successfully.');
   } catch (err) {
     console.error(err);
@@ -46714,8 +46714,8 @@ async function main() {
       await git.push(['--set-upstream', 'origin', targetBranch]);
     } else {
       await git.push();
+      await git.pushTags();
     }
-    await git.pushTags();
   }
   process.exit(exitCode);
 }
