@@ -279,6 +279,8 @@ async function main() {
       await writeJSON(path.join(rootDir, 'package.json'), rootPkg);
       const msg = interpolate(commitMsgTemplate, { package: rootPkg.name || 'root', version: rootPkg.version, bumpType: rootBump });
       await commitAndPush(rootDir, msg);
+    } else {
+      rootPkg.version = bumped[rootPkg.name].version;
     }
 
     // 8. Handle test failures
