@@ -46712,14 +46712,16 @@ async function main() {
       const remoteVersionedBranch = `origin/${versionedBranch}`;
       const branches = await git.branch(['--list', '--remote']);
       if (branches.all.includes(remoteVersionedBranch)) {
-        core.info(`[root] Checking out ${versionedBranch} from ${targetBranch}`);
-        await git.checkout(versionedBranch);
-        core.info(`[root] Merging ${targetBranch} into ${versionedBranch}`);
-        await git.merge([targetBranch]);
-      } else {
-        core.info(`[root] Checking out ${versionedBranch} from ${targetBranch}`);
-        await git.checkoutBranch(versionedBranch, targetBranch);
+        core.info(`[root] Deleting ${remoteVersionedBranch}`);
+        try {
+          await git.deleteLocalBranch(remoteVersionedBranch, true);
+        } catch { }
+        try {
+          await git.deleteRemoteBranch(remoteVersionedBranch);
+        } catch { }
       }
+      core.info(`[root] Checking out ${versionedBranch} from ${targetBranch}`);
+      await git.checkoutBranch(versionedBranch, targetBranch);
       core.info(`[root] Deleting ${targetBranch}`);
       await git.deleteLocalBranch(targetBranch, true);
       targetBranch = versionedBranch;
