@@ -219,6 +219,15 @@ async function main() {
     const branchTemplate = core.getInput('branch_template') || 'release/${version}';
     const templateRegex = new RegExp(branchTemplate.replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'));
     const branchDeletion = core.getInput('branch_deletion') || 'keep';
+    const branchTarget = core.getInput('branch_target') || 'main';
+    let lastTargetCommit;
+
+    if (branchTarget) {
+      core.info(`[root] Checking out ${branchTarget}`);
+      await git.checkout(branchTarget);
+      lastTargetCommit = await git.log(['-n1', '--no-patch']).latest;
+      core.info(`[root] Last commit in ${branchTarget}: ${lastTargetCommit.hash}`);
+    }
 
     const branch =
       process.env.GITHUB_HEAD_REF ||
@@ -251,9 +260,9 @@ async function main() {
       const { dir, pkg } = graph[name];
       const packageJsonPath = path.join(dir, 'package.json');
       const sha = await lastVersionChange(git, packageJsonPath);
-
+      const allCommits = await getCommitsAffecting(dir, lastTargetCommit || sha);
+      const requiredBump = getMostSignificantBump(allCommits);
       const commits = await getCommitsAffecting(dir, sha);
-      const requiredBump = getMostSignificantBump(commits);
       // Detect if a version bump has already been made
       const alreadyBumped = await hasAlreadyBumped(commits, requiredBump);
       // If the required bump is less than or equal to the last bump, skip

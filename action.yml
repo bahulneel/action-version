@@ -22,6 +22,10 @@ inputs:
     description: "Strategy for keeping the number of versioned branches. 'keep' will keep all versioned branches, 'prune' will prune all versioned branches except the latest one, 'semantic' will prune all verions branches of the same bump type."
     required: false
     default: "keep"
+  branch_target:
+    description: "The target branch to compare commits against."
+    required: false
+    default: "main"
 outputs:
   branch:
     description: "The branch that was created or updated."
