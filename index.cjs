@@ -129,11 +129,13 @@ function topoSort(graph) {
   return order;
 }
 
-async function getCommitsAffecting(dir, sinceTag) {
+async function getCommitsAffecting(dir, sinceRef) {
   // Get all commits affecting this dir since the last tag
-  let range = sinceTag ? `${sinceTag}..HEAD` : 'HEAD';
+  let range = sinceRef ? `${sinceRef}..HEAD` : 'HEAD';
   const log = execSync(`git log ${range} --pretty=medium -- ${dir}`, { encoding: 'utf8' });
-  return parseCommits(log);
+  const commits = parseCommits(log);
+  core.info(`[${dir}] ${commits.length} commits affecting since ${sinceRef}`);
+  return commits;
 }
 
 async function commitAndPush(dir, msg) {
@@ -173,6 +175,7 @@ async function runTest(dir, packageManager) {
 async function lastVersionChange(git, file) {
   // Return the git tag or sha of the last commit as a reference to the version
   const commits = await git.log(['-L', `/version/:${file}`, '-n1', '--no-patch']);
+  core.info(`[${file}] Last version change: ${commits.latest.hash}`);
   return commits.latest.hash;
 }
 
