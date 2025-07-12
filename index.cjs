@@ -197,6 +197,12 @@ function guessBumpType(version) {
   return 'patch';
 }
 
+function deleteRemoteBranch(branch) {
+  try {
+    execSync(`git push origin --delete ${branch}`);
+  } catch { }
+}
+
 async function main() {
   let exitCode = 0;
   let targetBranch = undefined;
@@ -406,7 +412,7 @@ async function main() {
               continue;
             }
             core.info(`[root] Deleting ${branch}`);
-            await git.deleteLocalBranch(branch, true);
+            deleteRemoteBranch(branch);
           }
         }
       }
