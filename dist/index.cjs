@@ -46683,6 +46683,7 @@ async function main() {
       await git.checkoutBranch(versionedBranch, targetBranch);
       await git.deleteLocalBranch(targetBranch, true);
       targetBranch = versionedBranch;
+      await git.fetch(['--prune', 'origin']);
       if (branchDeletion === 'prune' || branchDeletion === 'semantic') {
         const branches = await git.branch(['--list', '--remote']);
         for (const branch of branches.all) {
