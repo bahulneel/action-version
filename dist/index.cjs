@@ -46524,7 +46524,7 @@ async function hasAlreadyBumped(commits, requiredBump) {
 
 async function main() {
   let exitCode = 0;
-  const readOnlyBranch = core.GITHUB_REF_NAME?.includes('read-only') || core.GITHUB_REF_NAME?.includes('readonly');
+  let readOnlyBranch = false
   try {
     const commitMsgTemplate = core.getInput('commit_message_template') || 'chore(release): bump ${package} to ${version} (${bumpType})';
     const depCommitMsgTemplate = core.getInput('dep_commit_message_template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)';
@@ -46541,6 +46541,9 @@ async function main() {
       process.env.GITHUB_REF_NAME ||
       'main'; // fallback
 
+    if (branch.includes('read-only') || branch.includes('readonly')) {
+      readOnlyBranch = true;
+    }
     await git.checkout(branch);
 
     // 1. Discover all packages
