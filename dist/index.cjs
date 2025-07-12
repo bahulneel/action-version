@@ -42558,7 +42558,6 @@ async function getCommitsAffecting(dir, sinceTag) {
 async function commitAndPush(dir, msg) {
   await git.add([path.join(dir, 'package.json')]);
   await git.commit(msg);
-  await git.push();
 }
 
 async function tagVersion(lastTag, version) {
@@ -42570,7 +42569,6 @@ async function tagVersion(lastTag, version) {
   }
   core.info(`Tagging ${version}`);
   await git.addTag(tagName);
-  await git.pushTags('origin');
 }
 
 async function runTest(dir, packageManager) {
@@ -42713,6 +42711,9 @@ async function main() {
   } catch (err) {
     core.setFailed(err.message);
     process.exit(1);
+  } finally {
+    await git.push();
+    await git.pushTags();
   }
 }
 
