@@ -46602,6 +46602,7 @@ async function main() {
         }));
         if (bumped[dep].bumpType === 'major') isMajor = true;
       }
+      if (!msgs.length) continue;
       pkg.version = bumpVersion(pkg.version, 'patch');
       if (!bumped[pkg.name]) {
         bumped[pkg.name] = { version: pkg.version, bumpType: 'patch' };
