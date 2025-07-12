@@ -13,11 +13,11 @@
     "self": "node dist/index.cjs"
   },
   "dependencies": {
-    "source-map-js": "^1.1.3",
     "@actions/core": "^1.11.1",
     "conventional-commits-parser": "^4.0.0",
     "glob": "^10.3.10",
-    "simple-git": "^3.19.1"
+    "simple-git": "^3.19.1",
+    "source-map-support": "^0.5.21"
   },
   "devDependencies": {
     "@vercel/ncc": "^0.38.0"
