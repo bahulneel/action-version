@@ -46685,7 +46685,7 @@ async function main() {
       const branches = await git.branch(['--list', '--remote']);
       if (branches.all.includes(remoteVersionedBranch)) {
         await git.checkoutBranch(versionedBranch, remoteVersionedBranch);
-        await git.merge(targetBranch);
+        await git.merge([targetBranch]);
       } else {
         await git.checkoutBranch(versionedBranch, targetBranch);
       }
