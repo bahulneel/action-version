@@ -143,8 +143,11 @@ async function commitAndPush(dir, msg) {
 
 async function tagVersion(lastTag, version) {
   const tagName = `v${version}`;
-  if (!version) return;
-  if (lastTag === tagName) {
+  if (!version) {
+    core.warning('No version found, skipping tag');
+    return;
+  }
+  if (lastTag && lastTag === tagName) {
     core.info(`Skipping tag ${tagName} because it already exists`);
     return;
   }
@@ -165,6 +168,12 @@ async function runTest(dir, packageManager) {
   } catch {
     return false;
   }
+}
+
+function lastBumpSha(commits) {
+  const lastBump = commits.find(c => /chore\(release\): bump/.test(c.header))
+  if (!lastBump) return null;
+  return lastBump.sha
 }
 
 async function lastBumpType(commits) {
@@ -210,7 +219,7 @@ async function main() {
     let testFailures = [];
 
     const tags = (await git.tags(['--sort=-v:refname']))
-    const lastTag = tags.latest
+    const lastTag = tags.latest ?? lastBumpSha(await getCommitsAffecting(rootDir + '/package.json'))
     core.info(`Last tag: ${lastTag}`);
     // 5. For each package, determine bump, update, commit, push
     for (const name of order) {
@@ -299,9 +308,7 @@ async function main() {
       await writeJSON(path.join(rootDir, 'package.json'), rootPkg);
       const msg = interpolate(commitMsgTemplate, { package: rootPkg.name || 'root', version: rootPkg.version, bumpType: rootBump });
       await commitAndPush(rootDir, msg);
-    }
-
-    if (rootPkg.name && rootPkg.name in bumped) {
+    } else if (rootPkg.name && rootPkg.name in bumped) {
       rootPkg.version = bumped[rootPkg.name].version;
     }
     // 8. Handle test failures
