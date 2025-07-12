@@ -11,8 +11,17 @@ inputs:
     required: false
     default: "chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)"
   branch:
-    description: "Branch to push to."
+    description: "Update versions is a seperated branch."
     required: false
+    default: ?0
+  branch_template:
+    description: "Template for the branch to push to."
+    required: false
+    default: "release/${version}"
+  branch_deletion:
+    description: "Strategy for keeping the number of versioned branches. 'keep' will keep all versioned branches, 'prune' will prune all versioned branches except the latest one, 'semantic' will prune all verions branches of the same bump type."
+    required: false
+    default: "keep"
 runs:
   using: "node20"
   main: "dist/index.cjs"

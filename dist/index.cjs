@@ -46522,6 +46522,12 @@ async function hasAlreadyBumped(commits, requiredBump) {
   return bumpPriority(requiredBump) <= bumpPriority(bumpType);
 }
 
+function guessBumpType(version) {
+  if (version.endsWith('.0.0')) return 'major';
+  if (version.endsWith('.0')) return 'minor';
+  return 'patch';
+}
+
 async function main() {
   let exitCode = 0;
   let readOnlyBranch = false
@@ -46530,22 +46536,27 @@ async function main() {
     const depCommitMsgTemplate = core.getInput('dep_commit_message_template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)';
     const rootDir = process.cwd();
     const rootPkg = await readJSON(path.join(rootDir, 'package.json'));
-    const packageManager = (await fs.stat(path.join(rootDir, 'yarn.lock')).catch(() => false)) ? 'yarn' : 'npm';
+    const packageManager = getPackageManager();
 
     await git.addConfig('user.name', 'github-actions[bot]');
     await git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com');
-    const branchInput = core.getInput('branch');
+    const shouldCreateBranch = core.getInput('branch') || false;
+    const branchTemplate = core.getInput('branch_template') || 'release/${version}';
+    const templateRegex = new RegExp(branchTemplate.replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'));
+    const branchDeletion = core.getInput('branch_deletion') || 'keep';
+    const targetBranch = shouldCreateBranch ? interpolate(branchTemplate, {
+      version: 'PENDING'
+    }) : undefined;
     const branch =
-      branchInput ||
       process.env.GITHUB_HEAD_REF ||
       process.env.GITHUB_REF_NAME ||
       'main'; // fallback
 
-    if (branch.includes('read-only') || branch.includes('readonly')) {
-      readOnlyBranch = true;
-    }
     await git.checkout(branch);
 
+    if (targetBranch) {
+      await git.checkout(targetBranch, { create: true });
+    }
     // 1. Discover all packages
     const pkgDirs = await getPackageDirs(rootPkg);
     // 2. Build dependency graph
@@ -46664,6 +46675,27 @@ async function main() {
       throw new Error(`Test failures in: ${testFailures.join(', ')}`);
     }
     core.info(`[root] Tagging ${rootPkg.name} with v${rootPkg.version}`);
+    if (targetBranch) {
+      const versionedBranch = interpolate(targetBranch, {
+        version: rootPkg.version
+      })
+      await git.checkout(versionedBranch, { create: true });
+      await git.deleteLocalBranch(targetBranch, true);
+      if (branchDeletion === 'prune' || branchDeletion === 'semantic') {
+        const branches = await git.branchLocal();
+        for (const branch of branches.all) {
+          const match = branch.match(templateRegex);
+          const { version } = match.groups;
+          if (version) {
+            const bumpType = guessBumpType(version);
+            if (branchDeletion === 'semantic' && bumpType !== rootBump) {
+              continue;
+            }
+            await git.deleteLocalBranch(branch, true);
+          }
+        }
+      }
+    }
     await tagVersion(lastTag, rootPkg.version);
 
     core.info('Version bump action completed successfully.');
@@ -46672,10 +46704,8 @@ async function main() {
     core.setFailed(err.message);
     exitCode = 1;
   } finally {
-    if (!readOnlyBranch) {
-      await git.push();
-      await git.pushTags();
-    }
+    await git.push();
+    await git.pushTags();
   }
   process.exit(exitCode);
 }
