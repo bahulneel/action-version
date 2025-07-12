@@ -196,7 +196,6 @@ function guessBumpType(version) {
 
 async function main() {
   let exitCode = 0;
-  let readOnlyBranch = false
   try {
     const commitMsgTemplate = core.getInput('commit_message_template') || 'chore(release): bump ${package} to ${version} (${bumpType})';
     const depCommitMsgTemplate = core.getInput('dep_commit_message_template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)';
@@ -342,14 +341,18 @@ async function main() {
     }
     core.info(`[root] Tagging ${rootPkg.name} with v${rootPkg.version}`);
     if (targetBranch) {
-      const versionedBranch = interpolate(targetBranch, {
+      const versionedBranch = interpolate(branchTemplate, {
         version: rootPkg.version
       })
+      core.info(`[root] Checking out ${versionedBranch} from ${targetBranch}`);
       await git.checkoutBranch(versionedBranch, targetBranch);
       await git.deleteLocalBranch(targetBranch, true);
       if (branchDeletion === 'prune' || branchDeletion === 'semantic') {
-        const branches = await git.branchRemote();
+        const branches = await git.branch(['--list', '--remote']);
         for (const branch of branches.all) {
+          if (branch === versionedBranch) {
+            continue
+          }
           const match = branch.match(templateRegex);
           const { version } = match.groups;
           if (version) {
