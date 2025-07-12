@@ -210,13 +210,15 @@ async function main() {
     const branchTemplate = core.getInput('branch_template') || 'release/${version}';
     const templateRegex = new RegExp(branchTemplate.replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'));
     const branchDeletion = core.getInput('branch_deletion') || 'keep';
-    targetBranch = shouldCreateBranch ? interpolate(branchTemplate, {
-      version: 'PENDING'
-    }) : undefined;
+
     const branch =
       process.env.GITHUB_HEAD_REF ||
       process.env.GITHUB_REF_NAME ||
       'main'; // fallback
+
+    targetBranch = shouldCreateBranch ? interpolate(branchTemplate, {
+      version: branch
+    }) : undefined;
 
     await git.fetch(['--prune', 'origin']);
     if (targetBranch) {
