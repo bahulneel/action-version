@@ -357,6 +357,7 @@ async function main() {
       } else {
         await git.checkoutBranch(versionedBranch, targetBranch);
       }
+      core.info(`[root] Deleting ${targetBranch}`);
       await git.deleteLocalBranch(targetBranch, true);
       targetBranch = versionedBranch;
       if (branchDeletion === 'prune' || branchDeletion === 'semantic') {
@@ -385,7 +386,7 @@ async function main() {
     exitCode = 1;
   } finally {
     if (targetBranch) {
-      await git.push(['--set-upstream', 'origin', targetBranch]);
+      await git.push('origin', targetBranch, ['--set-upstream']);
     } else {
       await git.push();
       await git.pushTags();
