@@ -42563,7 +42563,11 @@ async function commitAndPush(dir, msg) {
 
 async function tagVersion(lastTag, version) {
   const tagName = `v${version}`;
-  if (!version || lastTag === tagName) return;
+  if (!version) return;
+  if (lastTag === tagName) {
+    core.info(`Skipping tag ${tagName} because it already exists`);
+    return;
+  }
   core.info(`Tagging ${version}`);
   await git.addTag(tagName);
   await git.pushTags('origin');
@@ -42643,6 +42647,7 @@ async function main() {
       const msg = interpolate(commitMsgTemplate, { package: pkg.name, version: newVersion, bumpType: requiredBump });
       await commitAndPush(dir, msg);
       bumped[name] = { version: newVersion, bumpType: requiredBump };
+      core.info(`Bumped ${pkg.name} to ${newVersion}`);
       bumpedCount++;
     }
 
@@ -42671,6 +42676,7 @@ async function main() {
             const ok = await runTest(dir, packageManager);
             if (!ok) testFailures.push(pkg.name);
           }
+          core.info(`Bumped ${pkg.name} to ${pkg.version}`);
         }
       }
     }
