@@ -279,6 +279,9 @@ async function main() {
       await commitAndPush(rootDir, msg);
     }
 
+    if (rootPkg.name && rootPkg.name in bumped) {
+      rootPkg.version = bumped[rootPkg.name].version;
+    }
     // 8. Handle test failures
     if (testFailures.length > 0) {
       core.setFailed(`Test failures in: ${testFailures.join(', ')}`);
