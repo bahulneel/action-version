@@ -1,3 +1,11 @@
+require('source-map-js/SourceMapConsumer').initialize({
+  "lib": {
+    "sources": [
+      "index.js"
+    ]
+  }
+});
+
 // index.js
 const core = require('@actions/core');
 const fs = require('fs/promises');
