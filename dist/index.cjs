@@ -46554,15 +46554,7 @@ async function main() {
 
     await git.fetch(['--prune', 'origin']);
     if (targetBranch) {
-      const remoteBranch = `origin/${branch}`;
-      const remoteTargetBranch = `origin/${targetBranch}`;
-      const branches = await git.branch(['--list', '--remote']);
-      if (branches.all.includes(remoteTargetBranch)) {
-        await git.checkoutBranch(targetBranch, remoteTargetBranch);
-        await git.merge(remoteBranch);
-      } else {
-        await git.checkoutBranch(targetBranch, remoteBranch);
-      }
+      await git.checkoutBranch(targetBranch, `origin/${branch}`);
     } else {
       await git.checkout(branch);
     }
@@ -46689,11 +46681,17 @@ async function main() {
         version: rootPkg.version
       })
       core.info(`[root] Checking out ${versionedBranch} from ${targetBranch}`);
-      await git.checkoutBranch(versionedBranch, targetBranch);
+      const remoteVersionedBranch = `origin/${versionedBranch}`;
+      const branches = await git.branch(['--list', '--remote']);
+      if (branches.all.includes(remoteVersionedBranch)) {
+        await git.checkoutBranch(versionedBranch, remoteVersionedBranch);
+        await git.merge(targetBranch);
+      } else {
+        await git.checkoutBranch(versionedBranch, targetBranch);
+      }
       await git.deleteLocalBranch(targetBranch, true);
       targetBranch = versionedBranch;
       if (branchDeletion === 'prune' || branchDeletion === 'semantic') {
-        const branches = await git.branch(['--list', '--remote']);
         for (const branch of branches.all) {
           if (branch === versionedBranch) {
             continue
