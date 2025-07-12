@@ -46558,7 +46558,7 @@ async function main() {
 
     if (branchTarget) {
       core.info(`[root] Checking out ${branchTarget}`);
-      await git.checkout(`origin/${branchTarget}`);
+      await git.checkoutBranch(branchTarget, `origin/${branchTarget}`);
       const commits = await git.log();
       if (!commits.latest) {
         core.error(`[root] No commits found in ${branchTarget}`);
