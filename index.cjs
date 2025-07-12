@@ -216,7 +216,7 @@ async function main() {
       const alreadyBumped = await hasAlreadyBumped(commits, requiredBump);
       // If the required bump is less than or equal to the last bump, skip
       if (alreadyBumped) {
-        core.info(`Skipping ${pkg.name} because it has already been bumped to ${requiredBump}`);
+        core.info(`[${name}] Skipping ${pkg.name} because it has already been bumped to ${requiredBump}`);
         bumped[name] = { version: pkg.version, bumpType: await lastBumpType(commits) };
         continue; // Skip bumping this package
       }
@@ -227,7 +227,7 @@ async function main() {
       const msg = interpolate(commitMsgTemplate, { package: pkg.name, version: newVersion, bumpType: requiredBump });
       await commitAndPush(dir, msg);
       bumped[name] = { version: newVersion, bumpType: requiredBump };
-      core.info(`Bumped ${pkg.name} to ${newVersion}`);
+      core.info(`[${name}] Bumped ${pkg.name} to ${newVersion}`);
       bumpedCount++;
     }
 
@@ -256,7 +256,7 @@ async function main() {
             const ok = await runTest(dir, packageManager);
             if (!ok) testFailures.push(pkg.name);
           }
-          core.info(`Bumped ${pkg.name} to ${pkg.version}`);
+          core.info(`[${name}] Bumped ${pkg.name} to ${pkg.version}`);
         }
       }
     }
@@ -272,7 +272,7 @@ async function main() {
       const commits = await getCommitsAffecting(rootDir + '/package.json', lastTag);
       const alreadyBumped = await hasAlreadyBumped(commits, rootBump);
       if (alreadyBumped) {
-        core.info(`Skipping root package because it has already been bumped to ${rootBump}`);
+        core.info(`[root] Skipping root package because it has already been bumped to ${rootBump}`);
         return;
       }
       rootPkg.version = bumpVersion(rootPkg.version, rootBump);
