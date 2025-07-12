@@ -42727,6 +42727,7 @@ async function main() {
 
     core.info('Version bump action completed successfully.');
   } catch (err) {
+    console.error(err);
     core.setFailed(err.message);
     exitCode = 1;
   } finally {
