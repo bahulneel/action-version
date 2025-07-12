@@ -46746,7 +46746,12 @@ async function main() {
               continue;
             }
             core.info(`[root] Deleting ${branch}`);
-            deleteRemoteBranch(branch);
+            try {
+              await git.deleteLocalBranch(branch, true);
+            } catch { }
+            try {
+              deleteRemoteBranch(branch.replace('origin/', ''));
+            } catch { }
           }
         }
       }
