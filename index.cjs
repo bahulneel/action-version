@@ -209,7 +209,7 @@ async function main() {
     const branchTemplate = core.getInput('branch_template') || 'release/${version}';
     const templateRegex = new RegExp(branchTemplate.replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'));
     const branchDeletion = core.getInput('branch_deletion') || 'keep';
-    const targetBranch = shouldCreateBranch ? interpolate(branchTemplate, {
+    let targetBranch = shouldCreateBranch ? interpolate(branchTemplate, {
       version: 'PENDING'
     }) : undefined;
     const branch =
@@ -347,6 +347,7 @@ async function main() {
       core.info(`[root] Checking out ${versionedBranch} from ${targetBranch}`);
       await git.checkoutBranch(versionedBranch, targetBranch);
       await git.deleteLocalBranch(targetBranch, true);
+      targetBranch = versionedBranch;
       if (branchDeletion === 'prune' || branchDeletion === 'semantic') {
         const branches = await git.branch(['--list', '--remote']);
         for (const branch of branches.all) {
@@ -373,7 +374,11 @@ async function main() {
     core.setFailed(err.message);
     exitCode = 1;
   } finally {
-    await git.push();
+    if (targetBranch) {
+      await git.push(['--set-upstream', targetBranch, `origin/${targetBranch}`]);
+    } else {
+      await git.push();
+    }
     await git.pushTags();
   }
   process.exit(exitCode);
