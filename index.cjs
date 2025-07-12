@@ -203,7 +203,6 @@ async function main() {
     const bumped = {};
     let testFailures = [];
 
-    let bumpedCount = 0;
     const tags = (await git.tags(['--sort=-v:refname']))
     const lastTag = tags.latest
     core.info(`Last tag: ${lastTag}`);
@@ -228,7 +227,6 @@ async function main() {
       await commitAndPush(dir, msg);
       bumped[name] = { version: newVersion, bumpType: requiredBump };
       core.info(`[${name}] Bumped ${pkg.name} to ${newVersion}`);
-      bumpedCount++;
     }
 
     // 6. For each dependent, update dependency, patch bump, commit, push, run tests if breaking
@@ -262,7 +260,7 @@ async function main() {
     }
 
     // 7. Aggregate and bump meta-package if needed
-    if (rootPkg.workspaces && bumpedCount > 0) {
+    if (rootPkg.workspaces) {
       // Aggregate most significant bump
       let rootBump = 'patch';
       for (const name in bumped) {
@@ -279,8 +277,6 @@ async function main() {
       await writeJSON(path.join(rootDir, 'package.json'), rootPkg);
       const msg = interpolate(commitMsgTemplate, { package: rootPkg.name || 'root', version: rootPkg.version, bumpType: rootBump });
       await commitAndPush(rootDir, msg);
-    } else {
-      rootPkg.version = bumped[rootPkg.name].version;
     }
 
     // 8. Handle test failures
