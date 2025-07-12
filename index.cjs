@@ -219,7 +219,7 @@ async function main() {
     let testFailures = [];
 
     const tags = (await git.tags(['--sort=-v:refname']))
-    const lastTag = tags.latest ?? lastBumpSha(await getCommitsAffecting(rootDir + '/package.json'))
+    const lastTag = tags.latest || lastBumpSha(await getCommitsAffecting(rootDir + '/package.json'))
     core.info(`Last tag: ${lastTag}`);
     // 5. For each package, determine bump, update, commit, push
     for (const name of order) {
