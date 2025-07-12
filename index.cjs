@@ -421,7 +421,7 @@ async function main() {
   } finally {
     if (targetBranch) {
       core.info(`[root] Pushing ${targetBranch}`);
-      await git.push('origin', targetBranch, ['--set-upstream']);
+      await git.push('origin', targetBranch, ['--set-upstream', '--force']);
     } else {
       core.info(`[root] Pushing current branch and tags`);
       await git.push();
