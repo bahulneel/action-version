@@ -400,7 +400,7 @@ async function main() {
       core.info(`[root] Branch deletion strategy: ${branchDeletion} using ${templateRegex.source}`);
       if (branchDeletion === 'prune' || branchDeletion === 'semantic') {
         for (const branch of branches.all) {
-          if (branch === versionedBranch) {
+          if (branch.replace('origin/', '') === versionedBranch) {
             continue
           }
           const match = branch.match(templateRegex);
