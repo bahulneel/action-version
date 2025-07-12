@@ -246,6 +246,7 @@ async function main() {
 
     // 6. For each dependent, update dependency, patch bump, commit, push, run tests if breaking
     for (const name of order) {
+      core.info(`[${name}] Bumping dependencies`);
       let isMajor = false;
       const { dir, pkg } = graph[name];
       const deps = new Map()
@@ -279,19 +280,24 @@ async function main() {
       }
       if (!msgs.length) continue;
       pkg.version = bumpVersion(pkg.version, 'patch');
+
       if (!bumped[pkg.name]) {
         bumped[pkg.name] = { version: pkg.version, bumpType: 'patch' };
       }
       await writeJSON(path.join(dir, 'package.json'), pkg);
       const msg = msgs.join('\n');
       if (isMajor) {
+        core.info(`[${pkg.name}] Some deps have major bump, running tests`);
         const ok = await runTest(dir, packageManager);
         if (!ok) testFailures.push(pkg.name);
       }
+      core.info(`[${pkg.name}] Committing and pushing`);
       await commitAndPush(dir, msg);
     }
+
     // 7. Aggregate and bump meta-package if needed
     if (rootPkg.workspaces) {
+      core.info(`[root] Bumping root package`);
       // Aggregate most significant bump
       let rootBump = 'patch';
       for (const name in bumped) {
@@ -309,12 +315,14 @@ async function main() {
       const msg = interpolate(commitMsgTemplate, { package: rootPkg.name || 'root', version: rootPkg.version, bumpType: rootBump });
       await commitAndPush(rootDir, msg);
     } else if (rootPkg.name && rootPkg.name in bumped) {
+      core.info(`[root] Root was bumped in a previous step`);
       rootPkg.version = bumped[rootPkg.name].version;
     }
     // 8. Handle test failures
     if (testFailures.length > 0) {
       throw new Error(`Test failures in: ${testFailures.join(', ')}`);
     }
+    core.info(`[root] Tagging ${rootPkg.name} with v${rootPkg.version}`);
     await tagVersion(lastTag, rootPkg.version);
 
     core.info('Version bump action completed successfully.');
