@@ -46739,6 +46739,7 @@ async function main() {
       await git.pushTags();
     }
   }
+  core.summary.write({ overwrite: true })
   process.exit(exitCode);
 }
 
