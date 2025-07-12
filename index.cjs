@@ -237,9 +237,10 @@ async function main() {
 
     // 6. For each dependent, update dependency, patch bump, commit, push, run tests if breaking
     for (const name of order) {
-      const isMajor = bumped[name].bumpType === 'major';
+      let isMajor = false;
       const { dir, pkg } = graph[name];
       const deps = new Map()
+      const msgs = []
       Object.entries(pkg.dependencies || {}).forEach(([dep, currentVersion]) => {
         if (typeof bumped[dep] !== 'object') return;
         if (currentVersion === '*' || currentVersion === bumped[dep].version) return;
@@ -258,19 +259,21 @@ async function main() {
       for (const [key, { currentVersion, bumpedVersion }] of deps) {
         core.info(`[${pkg.name}] Bumping ${name} from ${currentVersion} to ${bumpedVersion}`);
         pkg[key][dep] = `^${bumpedVersion}`;
+        msgs.push(interpolate(depCommitMsgTemplate, {
+          package: pkg.name,
+          depPackage: dep,
+          depVersion: bumped[dep].version,
+          version: pkg.version,
+          bumpType: 'patch',
+        }));
+        if (bumped[dep].bumpType === 'major') isMajor = true;
       }
       pkg.version = bumpVersion(pkg.version, 'patch');
       if (!bumped[pkg.name]) {
         bumped[pkg.name] = { version: pkg.version, bumpType: 'patch' };
       }
       await writeJSON(path.join(dir, 'package.json'), pkg);
-      const msg = interpolate(depCommitMsgTemplate, {
-        package: pkg.name,
-        depPackage: dep,
-        depVersion: bumped[dep].version,
-        version: pkg.version,
-        bumpType: 'patch',
-      });
+      const msg = msgs.join('\n');
       if (isMajor) {
         const ok = await runTest(dir, packageManager);
         if (!ok) testFailures.push(pkg.name);
