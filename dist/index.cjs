@@ -46574,23 +46574,23 @@ async function main() {
       const isMajor = bumped[name].bumpType === 'major';
       const { dir, pkg } = graph[name];
       const deps = new Map()
-      Object.entries(pkg.dependencies).forEach(([dep, currentVersion]) => {
+      Object.entries(pkg.dependencies || {}).forEach(([dep, currentVersion]) => {
         if (typeof bumped[dep] !== 'object') return;
         if (currentVersion === '*' || currentVersion === bumped[dep].version) return;
         deps.set(['dependencies', dep], { currentVersion, bumpedVersion: bumped[dep].version });
       })
-      Object.entries(pkg.devDependencies).forEach(([dep, currentVersion]) => {
+      Object.entries(pkg.devDependencies || {}).forEach(([dep, currentVersion]) => {
         if (typeof bumped[dep] !== 'object') return;
         if (currentVersion === '*' || currentVersion === bumped[dep].version) return;
         deps.set(['devDependencies', dep], { currentVersion, bumpedVersion: bumped[dep].version });
       })
-      Object.entries(pkg.peerDependencies).forEach(([dep, currentVersion]) => {
+      Object.entries(pkg.peerDependencies || {}).forEach(([dep, currentVersion]) => {
         if (typeof bumped[dep] !== 'object') return;
         if (currentVersion === '*' || currentVersion === bumped[dep].version) return;
         deps.set(['peerDependencies', dep], { currentVersion, bumpedVersion: bumped[dep].version });
       })
       for (const [key, { currentVersion, bumpedVersion }] of deps) {
-        core.info(`[${pkg.name}] Bumping ${name} to ${bumpedVersion}`);
+        core.info(`[${pkg.name}] Bumping ${name} from ${currentVersion} to ${bumpedVersion}`);
         pkg[key][dep] = `^${bumpedVersion}`;
       }
       pkg.version = bumpVersion(pkg.version, 'patch');
