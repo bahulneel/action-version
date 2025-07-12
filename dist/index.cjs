@@ -46554,7 +46554,7 @@ async function main() {
 
     await git.fetch(['--prune', 'origin']);
     if (targetBranch) {
-      await git.checkoutBranch(targetBranch, `origin/${branch}`);
+      await git.checkoutBranch(targetBranch, branch);
     } else {
       await git.checkout(branch);
     }
