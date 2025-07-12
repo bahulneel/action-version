@@ -46559,10 +46559,10 @@ async function main() {
     if (branchTarget) {
       core.info(`[root] Checking out ${branchTarget}`);
       const branches = await git.branch()
-      if (!branches.all.includes(`${branchTarget}`)) {
+      if (branches.all.includes(branchTarget)) {
         await git.checkout(branchTarget);
       } else {
-        await git.checkoutBranch(branchTarget, `origin/${branchTarget}`);
+        await git.checkoutBranch(branchTarget, branchTarget);
       }
       const commits = await git.log();
       if (!commits.latest) {
