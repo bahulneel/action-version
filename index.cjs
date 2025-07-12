@@ -218,8 +218,17 @@ async function main() {
       process.env.GITHUB_REF_NAME ||
       'main'; // fallback
 
+    await git.fetch(['--prune', 'origin']);
     if (targetBranch) {
-      await git.checkoutBranch(targetBranch, `origin/${branch}`);
+      const remoteBranch = `origin/${branch}`;
+      const remoteTargetBranch = `origin/${targetBranch}`;
+      const branches = await git.branch(['--list', '--remote']);
+      if (branches.all.includes(remoteTargetBranch)) {
+        await git.checkoutBranch(targetBranch, remoteTargetBranch);
+        await git.merge(remoteBranch);
+      } else {
+        await git.checkoutBranch(targetBranch, remoteBranch);
+      }
     } else {
       await git.checkout(branch);
     }
@@ -349,7 +358,6 @@ async function main() {
       await git.checkoutBranch(versionedBranch, targetBranch);
       await git.deleteLocalBranch(targetBranch, true);
       targetBranch = versionedBranch;
-      await git.fetch(['--prune', 'origin']);
       if (branchDeletion === 'prune' || branchDeletion === 'semantic') {
         const branches = await git.branch(['--list', '--remote']);
         for (const branch of branches.all) {
