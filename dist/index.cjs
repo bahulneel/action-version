@@ -46504,10 +46504,10 @@ async function runTest(dir, packageManager) {
   }
 }
 
-function lastBumpSha(commits) {
-  const lastBump = commits.find(c => /chore\(release\): bump/.test(c.header))
-  if (!lastBump) return null;
-  return lastBump.sha
+async function lastVersionChange(git, file) {
+  // Return the git tag or sha of the last commit as a reference to the version
+  const commits = await git.log(['-L', `/version/:${file}`, '-n1', '--no-patch']);
+  return commits.latest.hash;
 }
 
 async function lastBumpType(commits) {
@@ -46556,6 +46556,7 @@ async function main() {
 
     await git.fetch(['--prune', 'origin']);
     if (targetBranch) {
+      core.info(`[root] Checking out ${targetBranch} from ${branch}`);
       await git.checkoutBranch(targetBranch, branch);
     } else {
       await git.checkout(branch);
@@ -46570,13 +46571,13 @@ async function main() {
     const bumped = {};
     let testFailures = [];
 
-    const tags = (await git.tags(['--sort=-v:refname']))
-    const lastTag = tags.latest || lastBumpSha(await getCommitsAffecting(rootDir + '/package.json'))
-    core.info(`Last tag: ${lastTag}`);
     // 5. For each package, determine bump, update, commit, push
     for (const name of order) {
       const { dir, pkg } = graph[name];
-      const commits = await getCommitsAffecting(dir, lastTag);
+      const packageJsonPath = path.join(dir, 'package.json');
+      const rootSha = await lastVersionChange(git, packageJsonPath);
+      core.summary.addHeading(`[${name}@${pkg.version}] Last version change: ${rootSha}`);
+      const commits = await getCommitsAffecting(dir, rootSha);
       const requiredBump = getMostSignificantBump(commits);
       // Detect if a version bump has already been made
       const alreadyBumped = await hasAlreadyBumped(commits, requiredBump);
@@ -46589,7 +46590,7 @@ async function main() {
       if (requiredBump === 'patch' && commits.length === 0) continue; // No changes
       const newVersion = bumpVersion(pkg.version, requiredBump);
       pkg.version = newVersion;
-      await writeJSON(path.join(dir, 'package.json'), pkg);
+      await writeJSON(packageJsonPath, pkg);
       const msg = interpolate(commitMsgTemplate, { package: pkg.name, version: newVersion, bumpType: requiredBump });
       await commitAndPush(dir, msg);
       bumped[name] = { version: newVersion, bumpType: requiredBump };
@@ -46653,18 +46654,22 @@ async function main() {
         core.info(`[root] Bumping root package`);
         // Aggregate most significant bump
         let rootBump = 'patch';
+        const rootPackageJsonPath = path.join(rootDir, 'package.json');
         for (const name in bumped) {
-          if (bumped[name].bumpType === 'major') rootBump = 'major';
-          else if (bumped[name].bumpType === 'minor' && rootBump !== 'major') rootBump = 'minor';
+          if (bumpPriority(rootBump) < bumpPriority(bumped[name].bumpType)) {
+            rootBump = bumped[name].bumpType;
+          }
         }
-        const commits = await getCommitsAffecting(rootDir + '/package.json', lastTag);
+        const rootSha = await lastVersionChange(git, rootPackageJsonPath);
+        core.summary.addHeading(`[root@${rootPkg.version}] Last version change: ${rootSha}`);
+        const commits = await getCommitsAffecting(rootDir, rootSha);
         const alreadyBumped = await hasAlreadyBumped(commits, rootBump);
         if (alreadyBumped) {
           core.info(`[root] Skipping root package because it has already been bumped to ${rootBump}`);
           return;
         }
         rootPkg.version = bumpVersion(rootPkg.version, rootBump);
-        await writeJSON(path.join(rootDir, 'package.json'), rootPkg);
+        await writeJSON(rootPackageJsonPath, rootPkg);
         const msg = interpolate(commitMsgTemplate, { package: rootPkg.name || 'root', version: rootPkg.version, bumpType: rootBump });
         await commitAndPush(rootDir, msg);
       }
@@ -46677,7 +46682,7 @@ async function main() {
     if (testFailures.length > 0) {
       throw new Error(`Test failures in: ${testFailures.join(', ')}`);
     }
-    core.info(`[root] Tagging ${rootPkg.name} with v${rootPkg.version}`);
+    core.info(`[root] Bumping ${rootPkg.name} to v${rootPkg.version}`);
     if (targetBranch) {
       const versionedBranch = interpolate(branchTemplate, {
         version: rootPkg.version
@@ -46686,9 +46691,12 @@ async function main() {
       const remoteVersionedBranch = `origin/${versionedBranch}`;
       const branches = await git.branch(['--list', '--remote']);
       if (branches.all.includes(remoteVersionedBranch)) {
+        core.info(`[root] Checking out ${versionedBranch} from ${targetBranch}`);
         await git.checkout(versionedBranch);
+        core.info(`[root] Merging ${targetBranch} into ${versionedBranch}`);
         await git.merge([targetBranch]);
       } else {
+        core.info(`[root] Checking out ${versionedBranch} from ${targetBranch}`);
         await git.checkoutBranch(versionedBranch, targetBranch);
       }
       core.info(`[root] Deleting ${targetBranch}`);
@@ -46702,10 +46710,12 @@ async function main() {
           const match = branch.match(templateRegex);
           const { version } = match.groups;
           if (version) {
+            core.info(`[root] Considering deleting ${branch}`);
             const bumpType = guessBumpType(version);
             if (branchDeletion === 'semantic' && bumpType !== rootBump) {
               continue;
             }
+            core.info(`[root] Deleting ${branch}`);
             await git.deleteLocalBranch(branch, true);
           }
         }
@@ -46720,8 +46730,10 @@ async function main() {
     exitCode = 1;
   } finally {
     if (targetBranch) {
+      core.info(`[root] Pushing ${targetBranch}`);
       await git.push('origin', targetBranch, ['--set-upstream']);
     } else {
+      core.info(`[root] Pushing ${branch} and tags`);
       await git.push();
       await git.pushTags();
     }
