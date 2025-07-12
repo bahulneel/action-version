@@ -218,10 +218,10 @@ async function main() {
       process.env.GITHUB_REF_NAME ||
       'main'; // fallback
 
-    await git.checkout(branch);
-
     if (targetBranch) {
-      await git.checkout(targetBranch, { create: true });
+      await git.checkoutBranch(targetBranch, `origin/${branch}`);
+    } else {
+      await git.checkout(branch);
     }
     // 1. Discover all packages
     const pkgDirs = await getPackageDirs(rootPkg);
