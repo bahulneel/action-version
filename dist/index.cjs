@@ -42555,19 +42555,6 @@ async function getCommitsAffecting(dir, sinceTag) {
   return parseCommits(log);
 }
 
-async function getLastTag(pkgName) {
-  // Try to find the last tag for this package
-  try {
-    const tags = execSync('git tag', { encoding: 'utf8' })
-      .split('\n')
-      .filter(Boolean)
-      .filter(t => t.startsWith(`${pkgName}@`));
-    return tags.sort().pop();
-  } catch {
-    return null;
-  }
-}
-
 async function commitAndPush(dir, msg) {
   await git.add([path.join(dir, 'package.json')]);
   await git.commit(msg);
@@ -42633,10 +42620,12 @@ async function main() {
     let testFailures = [];
 
     let bumpedCount = 0;
+    const tags = (await git.tags(['--sort=-v:refname']))
+    const lastTag = tags.latest
+    core.info(`Last tag: ${lastTag}`);
     // 5. For each package, determine bump, update, commit, push
     for (const name of order) {
       const { dir, pkg } = graph[name];
-      const lastTag = await getLastTag(pkg.name);
       const commits = await getCommitsAffecting(dir, lastTag);
       const requiredBump = getMostSignificantBump(commits);
       // Detect if a version bump has already been made
