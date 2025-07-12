@@ -46725,13 +46725,14 @@ async function main() {
       core.info(`[root] Deleting ${targetBranch}`);
       await git.deleteLocalBranch(targetBranch, true);
       targetBranch = versionedBranch;
+      core.info(`[root] Branch deletion strategy: ${branchDeletion} using ${templateRegex.source}`);
       if (branchDeletion === 'prune' || branchDeletion === 'semantic') {
         for (const branch of branches.all) {
           if (branch === versionedBranch) {
             continue
           }
           const match = branch.match(templateRegex);
-          const { version } = match.groups;
+          const { version } = match?.groups || {};
           if (version) {
             core.info(`[root] Considering deleting ${branch}`);
             const bumpType = guessBumpType(version);
