@@ -1,4 +1,4 @@
-/******/ (() => { // webpackBootstrap
+require('./sourcemap-register.cjs');/******/ (() => { // webpackBootstrap
 /******/ 	var __webpack_modules__ = ({
 
 /***/ 4914:
@@ -42741,3 +42741,4 @@ main();
 module.exports = __webpack_exports__;
 /******/ })()
 ;
+//# sourceMappingURL=index.cjs.js.map

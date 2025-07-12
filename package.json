@@ -9,7 +9,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "build": "ncc build index.cjs -o dist",
+    "build": "ncc build index.cjs -s -o dist",
     "self": "node dist/index.cjs"
   },
   "dependencies": {
