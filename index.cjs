@@ -178,9 +178,9 @@ async function lastBumpType(commits) {
 }
 
 async function hasAlreadyBumped(commits, requiredBump) {
-  const lastBumpType = await lastBumpType(commits);
-  if (!lastBumpType) return false;
-  return bumpPriority(requiredBump) <= bumpPriority(lastBumpType);
+  const bumpType = await lastBumpType(commits);
+  if (!bumpType) return false;
+  return bumpPriority(requiredBump) <= bumpPriority(bumpType);
 }
 
 async function main() {
@@ -224,7 +224,7 @@ async function main() {
       // If the required bump is less than or equal to the last bump, skip
       if (alreadyBumped) {
         core.info(`Skipping ${pkg.name} because it has already been bumped to ${requiredBump}`);
-        bumped[name] = { version: pkg.version, bumpType: lastBumpType(commits) };
+        bumped[name] = { version: pkg.version, bumpType: await lastBumpType(commits) };
         continue; // Skip bumping this package
       }
       if (requiredBump === 'patch' && commits.length === 0) continue; // No changes
