@@ -46575,15 +46575,16 @@ async function main() {
     for (const name of order) {
       const { dir, pkg } = graph[name];
       const packageJsonPath = path.join(dir, 'package.json');
-      const rootSha = await lastVersionChange(git, packageJsonPath);
-      const commits = await getCommitsAffecting(dir, rootSha);
+      const sha = await lastVersionChange(git, packageJsonPath);
+
+      const commits = await getCommitsAffecting(dir, sha);
       const requiredBump = getMostSignificantBump(commits);
       // Detect if a version bump has already been made
       const alreadyBumped = await hasAlreadyBumped(commits, requiredBump);
       // If the required bump is less than or equal to the last bump, skip
       if (alreadyBumped) {
         core.info(`[${name}] Skipping ${pkg.name} because it has already been bumped to ${requiredBump}`);
-        bumped[name] = { version: pkg.version, bumpType: await lastBumpType(commits), rootSha };
+        bumped[name] = { version: pkg.version, bumpType: await lastBumpType(commits), sha };
         continue; // Skip bumping this package
       }
       if (requiredBump === 'patch' && commits.length === 0) continue; // No changes
@@ -46592,7 +46593,7 @@ async function main() {
       await writeJSON(packageJsonPath, pkg);
       const msg = interpolate(commitMsgTemplate, { package: pkg.name, version: newVersion, bumpType: requiredBump });
       await commitAndPush(dir, msg);
-      bumped[name] = { version: newVersion, bumpType: requiredBump };
+      bumped[name] = { version: newVersion, bumpType: requiredBump, sha };
       core.info(`[${name}] Bumped ${pkg.name} to ${newVersion}`);
     }
 
@@ -46634,7 +46635,8 @@ async function main() {
       pkg.version = bumpVersion(pkg.version, 'patch');
 
       if (!bumped[pkg.name]) {
-        bumped[pkg.name] = { version: pkg.version, bumpType: 'patch', rootSha };
+        const sha = await lastVersionChange(git, path.join(dir, 'package.json'));
+        bumped[pkg.name] = { version: pkg.version, bumpType: 'patch', sha };
       }
       await writeJSON(path.join(dir, 'package.json'), pkg);
       const msg = msgs.join('\n');
@@ -46671,7 +46673,7 @@ async function main() {
         const msg = interpolate(commitMsgTemplate, { package: rootPkg.name || 'root', version: rootPkg.version, bumpType: rootBump });
         await commitAndPush(rootDir, msg);
         core.info(`[root@${rootPkg.version}] Bumped to ${rootPkg.version}`);
-        bumped[rootPkg.name] = { version: rootPkg.version, bumpType: rootBump, rootSha };
+        bumped[rootPkg.name] = { ...bumped[rootPkg.name], version: rootPkg.version, bumpType: rootBump };
       }
       await bumpRoot()
     } else if (rootPkg.name && rootPkg.name in bumped) {
@@ -46688,14 +46690,14 @@ async function main() {
         { data: 'Package', header: true },
         { data: 'Version', header: true },
         { data: 'Bump Type', header: true },
-        { data: 'Root Sha', header: true },
+        { data: 'Previous Commit', header: true },
         { data: 'OK', header: true }
       ],
-      ...Object.entries(bumped).map(([name, { version, bumpType, rootSha }]) => [
+      ...Object.entries(bumped).map(([name, { version, bumpType, sha }]) => [
         { data: name },
         { data: version },
         { data: bumpType },
-        { data: rootSha.slice(0, 7) },
+        { data: sha?.slice(0, 7) || 'N/A' },
         { data: testFailures.includes(name) ? ':x:' : ':white_check_mark:' }
       ]),
     ]);
