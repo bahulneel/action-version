@@ -10,10 +10,6 @@ inputs:
     description: "Commit message template for dependency updates."
     required: false
     default: "chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)"
-  tag_version:
-    description: "Whether to tag the version."
-    required: false
-    default: "false"
   branch:
     description: "Branch to push to."
     required: false

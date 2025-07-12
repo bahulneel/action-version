@@ -172,7 +172,6 @@ async function main() {
   try {
     const commitMsgTemplate = core.getInput('commit_message_template') || 'chore(release): bump ${package} to ${version} (${bumpType})';
     const depCommitMsgTemplate = core.getInput('dep_commit_message_template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)';
-    const tagVersion = core.getInput('tag_version') === 'true';
     const rootDir = process.cwd();
     const rootPkg = await readJSON(path.join(rootDir, 'package.json'));
     const packageManager = (await fs.stat(path.join(rootDir, 'yarn.lock')).catch(() => false)) ? 'yarn' : 'npm';
@@ -205,6 +204,7 @@ async function main() {
       const lastTag = await getLastTag(pkg.name);
       const commits = await getCommitsAffecting(dir, lastTag);
       const requiredBump = getMostSignificantBump(commits);
+      const tagVersion = !rootPkg.workspaces;
       // Detect if a version bump has already been made
       let lastBumpType = null;
       const bumpCommit = commits.find(c => /chore\(release\): bump/.test(c.header));
@@ -267,8 +267,7 @@ async function main() {
       rootPkg.version = bumpVersion(rootPkg.version, rootBump);
       await writeJSON(path.join(rootDir, 'package.json'), rootPkg);
       const msg = interpolate(commitMsgTemplate, { package: rootPkg.name || 'root', version: rootPkg.version, bumpType: rootBump });
-      const version = tagVersion ? rootPkg.version : undefined;
-      await commitAndPush(rootDir, msg, version);
+      await commitAndPush(rootDir, msg, rootPkg.version);
     }
 
     // 8. Handle test failures
