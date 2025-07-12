@@ -46679,10 +46679,10 @@ async function main() {
       const versionedBranch = interpolate(targetBranch, {
         version: rootPkg.version
       })
-      await git.checkout(versionedBranch, { create: true });
+      await git.checkoutBranch(versionedBranch, targetBranch);
       await git.deleteLocalBranch(targetBranch, true);
       if (branchDeletion === 'prune' || branchDeletion === 'semantic') {
-        const branches = await git.branchLocal();
+        const branches = await git.branchRemote();
         for (const branch of branches.all) {
           const match = branch.match(templateRegex);
           const { version } = match.groups;
