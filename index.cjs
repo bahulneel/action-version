@@ -173,6 +173,7 @@ async function hasAlreadyBumped(commits, requiredBump) {
 }
 
 async function main() {
+  let exitCode = 0;
   try {
     const commitMsgTemplate = core.getInput('commit_message_template') || 'chore(release): bump ${package} to ${version} (${bumpType})';
     const depCommitMsgTemplate = core.getInput('dep_commit_message_template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)';
@@ -282,19 +283,19 @@ async function main() {
     }
     // 8. Handle test failures
     if (testFailures.length > 0) {
-      core.setFailed(`Test failures in: ${testFailures.join(', ')}`);
-      process.exit(1);
+      throw new Error(`Test failures in: ${testFailures.join(', ')}`);
     }
     await tagVersion(lastTag, rootPkg.version);
 
     core.info('Version bump action completed successfully.');
   } catch (err) {
     core.setFailed(err.message);
-    process.exit(1);
+    exitCode = 1;
   } finally {
     await git.push();
     await git.pushTags();
   }
+  process.exit(exitCode);
 }
 
 main(); 
