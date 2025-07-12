@@ -46721,6 +46721,7 @@ async function main() {
         }
       }
     } else {
+      const lastTag = await git.tags(['--sort=-v:refname']).latest;
       await tagVersion(lastTag, rootPkg.version);
     }
     core.info('Version bump action completed successfully.');
