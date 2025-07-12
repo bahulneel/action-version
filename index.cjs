@@ -148,15 +148,18 @@ async function getLastTag(pkgName) {
   }
 }
 
-async function commitAndPush(dir, msg, version) {
+async function commitAndPush(dir, msg) {
   await git.add([path.join(dir, 'package.json')]);
   await git.commit(msg);
   await git.push();
-  if (version) {
-    core.info(`Tagging ${version}`);
-    await git.addTag(`v${version}`);
-    await git.pushTags('origin');
-  }
+}
+
+async function tagVersion(lastTag, version) {
+  const tagName = `v${version}`;
+  if (!version || lastTag === tagName) return;
+  core.info(`Tagging ${version}`);
+  await git.addTag(tagName);
+  await git.pushTags('origin');
 }
 
 async function runTest(dir, packageManager) {
@@ -222,8 +225,8 @@ async function main() {
       pkg.version = newVersion;
       await writeJSON(path.join(dir, 'package.json'), pkg);
       const msg = interpolate(commitMsgTemplate, { package: pkg.name, version: newVersion, bumpType: requiredBump });
-      const version = tagVersion && !rootPkg.workspaces ? newVersion : undefined;
-      await commitAndPush(dir, msg, version);
+      await commitAndPush(dir, msg);
+      if (tagVersion) await tagVersion(lastTag, newVersion);
       bumped[name] = { version: newVersion, bumpType: requiredBump };
       bumpedCount++;
     }
@@ -267,7 +270,8 @@ async function main() {
       rootPkg.version = bumpVersion(rootPkg.version, rootBump);
       await writeJSON(path.join(rootDir, 'package.json'), rootPkg);
       const msg = interpolate(commitMsgTemplate, { package: rootPkg.name || 'root', version: rootPkg.version, bumpType: rootBump });
-      await commitAndPush(rootDir, msg, rootPkg.version);
+      await commitAndPush(rootDir, msg);
+      await tagVersion(lastTag, rootPkg.version);
     }
 
     // 8. Handle test failures
