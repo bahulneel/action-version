@@ -46508,7 +46508,7 @@ async function runTest(dir, packageManager) {
 
 async function lastVersionChange(git, file, version) {
   // Return the git tag or sha of the last commit as a reference to the version
-  let commits = await git.log(['-L', `/version:\\s+\"${version}\"/:${file}`, '-n1', '--no-patch']);
+  let commits = await git.log(['-L', `/version:.*${version.replace(/\./g, '\\.')}.*"/:${file}`, '-n1', '--no-patch']);
   if (!commits.latest) {
     core.warning(`[${path.relative(process.cwd(), file) || '/'}] No version change found for ${version} falling back to when the version was set`);
     commits = await git.log(['-L', `/version/:${file}`, '-n1', '--no-patch']);
