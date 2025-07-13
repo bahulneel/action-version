@@ -9,24 +9,39 @@
 - Missing version initialization
 - Reference version fallback issues
 
-**Fix:** Use robust semver package for all version operations
+**Fix:** Use semver package with custom suffix management (format: 1.1.0-1, 1.1.0-2, etc.)
 ```javascript
 const semver = require('semver');
 
-// Replace calculateBumpType()
-function calculateBumpType(fromVersion, toVersion) {
-  const from = semver.coerce(fromVersion) || '0.0.0';
-  const to = semver.coerce(toVersion) || '0.0.0';
-  return semver.diff(from, to); // 'major', 'minor', 'patch', 'prerelease', null
+// Parse version with normalized suffix
+function parseVersionWithSuffix(version) {
+  const match = version.match(/^(\d+\.\d+\.\d+)(?:-(\d+))?$/);
+  if (!match) return null;
+  return {
+    base: match[1],
+    suffix: match[2] ? parseInt(match[2]) : null
+  };
 }
 
-// Replace version initialization
-function initializeVersion(version) {
-  return semver.coerce(version) || '0.0.0';
+// Get base version for comparisons
+function getBaseVersion(version) {
+  const parsed = parseVersionWithSuffix(version);
+  return parsed ? parsed.base : semver.coerce(version) || '0.0.0';
 }
 
-// Replace reference version fallback  
-referenceVersion = semver.coerce(referenceVersion || rootPkg.version) || '0.0.0';
+// Get next suffix version (finds lowest available starting at 1)
+async function getNextSuffixVersion(currentVersion, existingVersions) {
+  const parsed = parseVersionWithSuffix(currentVersion);
+  if (!parsed) return null;
+  
+  const sameBaseVersions = existingVersions
+    .map(v => parseVersionWithSuffix(v))
+    .filter(v => v && v.base === parsed.base)
+    .map(v => v.suffix || 0);
+  
+  const maxSuffix = Math.max(0, ...sameBaseVersions);
+  return `${parsed.base}-${maxSuffix + 1}`;
+}
 ```
 
 ### 5. Handle git log -L Failure Gracefully
