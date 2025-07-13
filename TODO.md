@@ -1,113 +1,67 @@
-# Version Bump Action - TODO
+# TODO: Fix Simplified Version Bump Logic
 
-## Critical Bugs to Fix
+## Critical Bugs Identified in Scenario Analysis
 
-### 1. Missing Version Field Handling
-**Problem:** Logic crashes when package.json has no `version` field
-- `getVersionAtCommit()` returns `null` causing downstream failures
-- `calculateBumpType()` crashes on `undefined.split('.')`
-- No initialization logic for packages without versions
+### 1. Fix `getVersionAtCommit()` for Missing Version Fields
+**Issue:** When target branch package.json has no `version` field, function returns `null`
+```javascript
+// Current broken code:
+const pkg = JSON.parse(content);
+return pkg.version; // Returns undefined/null
 
-**Fix Required:**
-- [ ] Add default version `'0.0.0'` in `getVersionAtCommit()` when missing
-- [ ] Add defensive checks in `calculateBumpType()` for undefined versions  
-- [ ] Initialize missing versions to `'0.0.0'` during package processing
-- [ ] Handle case where current package.json has no version field
+// Fix needed:
+return pkg.version || '0.0.0'; // Default when missing
+```
 
-### 2. Reference Version Fallback Chain
-**Problem:** Complex fallback logic can still result in `undefined` reference version
-- Target branch package.json with no version → `null`
-- Current package.json with no version → `undefined` 
-- No final fallback to sensible default
+### 2. Fix `calculateBumpType()` for Undefined Versions  
+**Issue:** Function crashes calling `.split('.')` on undefined values
+```javascript
+// Current broken code:
+const [fromMajor, fromMinor, fromPatch] = fromVersion.split('.').map(Number);
 
-**Fix Required:**
-- [ ] Ensure reference version establishment always has final fallback to `'0.0.0'`
-- [ ] Simplify the fallback chain to be more predictable
+// Fix needed:
+fromVersion = fromVersion || '0.0.0';
+toVersion = toVersion || '0.0.0';
+```
 
-### 3. Git Log Strategy Robustness
-**Problem:** `git log -L '/version/:'` fails silently when field doesn't exist
-- Falls back to file creation which may be very old
-- No clear logging about which strategy was used
+### 3. Initialize Missing Version in Current Package
+**Issue:** Logic assumes `pkg.version` exists, but it might not
+```javascript
+// Add before processing each package:
+if (!pkg.version) {
+  pkg.version = '0.0.0';
+  core.info(`[${name}] Initializing missing version to 0.0.0`);
+}
+```
 
-**Fix Required:**
-- [ ] Add better error handling and logging for git log strategies
-- [ ] Consider alternative approach when version field never existed
-- [ ] Clear logging about which fallback strategy was used
+### 4. Fix Reference Version Fallback Chain
+**Issue:** Can still end up with `undefined` referenceVersion
+```javascript
+// Current problematic fallback:
+if (!referenceVersion) {
+  referenceVersion = rootPkg.version; // Also might be undefined!
+}
 
-## Edge Cases to Handle
+// Fix needed:
+referenceVersion = referenceVersion || rootPkg.version || '0.0.0';
+```
 
-### 4. New Package Scenarios
-- [ ] Package with no version field (current issue)
-- [ ] Package that never had version field in git history
-- [ ] Empty repository with no commits
-- [ ] Repository with no tags and no target branch
+### 5. Handle git log -L Failure Gracefully
+**Issue:** `git log -L '/version/:'` silently fails when version field never existed
+```javascript
+// Add better logging in getLastVersionChangeCommit():
+core.debug(`Could not find version change for ${packageJsonPath}: using file creation fallback`);
+```
 
-### 5. Version Comparison Edge Cases  
-- [ ] Comparing `0.0.0` with `undefined`
-- [ ] Handling pre-release versions (e.g. `1.0.0-alpha.1`)
-- [ ] Malformed version strings
-- [ ] Version field with non-string values
+## Test Scenario That Should Work After Fixes
+- Target branch: package.json with no version field
+- Active branch: 3 patch commits  
+- Expected result: Package bumped from 0.0.0 → 0.0.1
 
-### 6. Dependency Update Edge Cases
-- [ ] Dependency spec parsing for various formats (`^`, `~`, exact, ranges)
-- [ ] Handling workspace protocol dependencies (e.g. `workspace:*`)
-- [ ] Peer dependency handling during major bumps
-- [ ] Optional dependencies handling
+## Changes Required in index.cjs
 
-## Testing Scenarios to Add
-
-### 7. Comprehensive Test Coverage
-- [ ] Package without version field (current scenario)
-- [ ] Monorepo with mix of versioned/unversioned packages
-- [ ] Major version bump with test failures
-- [ ] Circular dependency scenarios
-- [ ] Mixed conventional commit types
-- [ ] Branch with no changes since reference
-- [ ] Repository with only merge commits
-
-### 8. Integration Tests
-- [ ] End-to-end test with real git history
-- [ ] Test with various package managers (npm, yarn, pnpm)
-- [ ] Test with different branch strategies
-- [ ] Test branch deletion scenarios
-
-## Code Quality Improvements
-
-### 9. Error Handling
-- [ ] Wrap git operations in proper try-catch blocks
-- [ ] Provide meaningful error messages for common failure modes
-- [ ] Graceful degradation when git operations fail
-- [ ] Validate package.json structure before processing
-
-### 10. Logging and Debugging
-- [ ] Consistent logging format across all operations
-- [ ] Debug mode with verbose git operation logging
-- [ ] Clear indication of which strategy/fallback was used
-- [ ] Summary of decisions made for each package
-
-## Documentation
-
-### 11. User-Facing Documentation
-- [ ] Document behavior when version field is missing
-- [ ] Explain reference point selection logic
-- [ ] Document dependency update behavior
-- [ ] Add troubleshooting guide for common issues
-
-### 12. Developer Documentation
-- [ ] Add inline code comments explaining complex logic
-- [ ] Document the decision tree for version bumping
-- [ ] Add examples of edge cases and how they're handled
-
-## Priority Order
-
-**P0 (Critical):** Items 1-3 (fix crashes and undefined behavior)
-**P1 (High):** Items 4-6 (handle edge cases properly)  
-**P2 (Medium):** Items 7-8 (comprehensive testing)
-**P3 (Low):** Items 9-12 (code quality and documentation)
-
-## Notes
-
-- The current implementation assumes all packages have version fields
-- Need to be careful about backward compatibility with existing workflows
-- Consider semantic versioning specification compliance
-- Ensure consistent behavior between single-package and monorepo modes
+- [ ] Update `getVersionAtCommit()` to return '0.0.0' for missing versions
+- [ ] Update `calculateBumpType()` to handle undefined inputs safely  
+- [ ] Add version initialization logic in main package loop
+- [ ] Fix reference version fallback to guarantee non-undefined value
+- [ ] Improve error logging in `getLastVersionChangeCommit()`
