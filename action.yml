@@ -41,6 +41,20 @@ inputs:
 outputs:
   branch:
     description: "The branch that was created or updated."
+  packages-updated:
+    description: "Number of packages that had their versions updated."
+  releases-created:
+    description: "Number of release versions created."
+  prereleases-created:
+    description: "Number of prerelease versions created."
+  versions-finalized:
+    description: "Number of prerelease versions finalized to releases."
+  test-failures:
+    description: "Number of packages that failed tests during updates."
+  strategy-used:
+    description: "The strategy that was used for version bumping."
+  changes-made:
+    description: "Boolean indicating if any changes were made."
 runs:
   using: "node20"
   main: "dist/index.cjs"

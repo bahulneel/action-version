@@ -377,7 +377,7 @@ async function lastNonMergeCommit(git, branch) {
 
 async function main() {
   let exitCode = 0;
-  let targetBranch = undefined;
+  let outputBranch = undefined;
   let hasBumped = false;
 
   try {
@@ -389,7 +389,7 @@ async function main() {
 
     await git.addConfig('user.name', 'github-actions[bot]');
     await git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com');
-    const shouldCreateBranch = core.getInput('create-branch') === 'true';
+    const shouldCreateBranch = core.getBooleanInput('create-branch');
     const branchTemplate = core.getInput('branch-template') || 'release/${version}';
     const templateRegex = new RegExp(branchTemplate.replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'));
     const branchCleanup = core.getInput('branch-cleanup') || 'keep';
@@ -398,7 +398,7 @@ async function main() {
     // Strategy and workflow inputs
     const strategy = core.getInput('strategy') || 'do-nothing';
     const activeBranch = core.getInput('branch') || 'develop';
-    const tagPrereleases = core.getInput('tag-prereleases') === 'true';
+    const tagPrereleases = core.getBooleanInput('tag-prereleases');
     
     // Validate configuration inputs
     const validStrategies = ['do-nothing', 'apply-bump', 'pre-release'];
@@ -576,7 +576,7 @@ async function main() {
     // Step 2: For each package, determine if it needs bumping (skip if finalizing)
     if (!shouldFinalizeVersions) {
       for (const name of order) {
-      const { dir, pkg } = graph[name];
+        const { dir, pkg } = graph[name];
       const packageJsonPath = path.join(dir, 'package.json');
       
       // Initialize version if missing
@@ -795,8 +795,8 @@ async function main() {
     core.summary.addHeading('Configuration Used', 3);
     core.summary.addList([
       `Strategy: ${strategy}`,
-      `Source branch: ${sourceBranch}`,
-      `Target branch: ${targetBranch || 'N/A'}`,
+      `Active branch: ${activeBranch}`,
+      `Base branch: ${baseBranch || 'N/A'}`,
       `Tag prereleases: ${tagPrereleases}`,
       `Should finalize versions: ${shouldFinalizeVersions}`
     ]);
@@ -813,12 +813,28 @@ async function main() {
     
     if (totalPackages > 0) {
       core.info(`[summary] Processed ${totalPackages} packages: ${releasePackages} releases, ${prereleasePackages} prereleases, ${finalizedPackages} finalized`);
+      core.notice(`Version bump completed: ${totalPackages} packages updated (${releasePackages} releases, ${prereleasePackages} prereleases)`);
     } else {
       core.info(`[summary] No packages required version changes with strategy '${strategy}'`);
+      core.notice(`No version changes needed with strategy '${strategy}'`);
     }
 
-    // Branch and tag handling (unchanged)
-    if (targetBranch && hasBumped) {
+    // Set comprehensive outputs
+    core.setOutput('packages-updated', totalPackages);
+    core.setOutput('releases-created', releasePackages);
+    core.setOutput('prereleases-created', prereleasePackages);
+    core.setOutput('versions-finalized', finalizedPackages);
+    core.setOutput('test-failures', testFailures.length);
+    core.setOutput('strategy-used', strategy);
+    core.setOutput('changes-made', hasBumped);
+    
+    // Export useful environment variables
+    core.exportVariable('VERSION_BUMP_PACKAGES_UPDATED', totalPackages);
+    core.exportVariable('VERSION_BUMP_CHANGES_MADE', hasBumped);
+    core.exportVariable('VERSION_BUMP_STRATEGY', strategy);
+
+    // Branch and tag handling
+    if (newBranch && hasBumped) {
       const versionedBranch = interpolate(branchTemplate, {
         version: rootPkg.version
       })
@@ -833,11 +849,11 @@ async function main() {
           await git.deleteRemoteBranch(remoteVersionedBranch);
         } catch { }
       }
-      core.info(`[root] Checking out ${versionedBranch} from ${targetBranch}`);
-      await git.checkoutBranch(versionedBranch, targetBranch);
-      core.info(`[root] Deleting ${targetBranch}`);
-      await git.deleteLocalBranch(targetBranch, true);
-      targetBranch = versionedBranch;
+      core.info(`[root] Checking out ${versionedBranch} from ${newBranch}`);
+      await git.checkoutBranch(versionedBranch, newBranch);
+      core.info(`[root] Deleting ${newBranch}`);
+      await git.deleteLocalBranch(newBranch, true);
+      outputBranch = versionedBranch;
       core.info(`[root] Branch cleanup strategy: ${branchCleanup} using ${templateRegex.source}`);
       if (branchCleanup === 'prune' || branchCleanup === 'semantic') {
         for (const branch of branches.all) {
@@ -892,11 +908,11 @@ async function main() {
   } finally {
     if (hasBumped) {
       try {
-        if (targetBranch) {
-          core.info(`[git] Pushing ${targetBranch} to origin`);
-          await git.push('origin', targetBranch, ['--set-upstream', '--force']);
-          core.setOutput('branch', targetBranch);
-          core.info(`[git] Successfully pushed ${targetBranch}`);
+        if (outputBranch) {
+          core.info(`[git] Pushing ${outputBranch} to origin`);
+          await git.push('origin', outputBranch, ['--set-upstream', '--force']);
+          core.setOutput('branch', outputBranch);
+          core.info(`[git] Successfully pushed ${outputBranch}`);
         } else {
           core.info(`[git] Pushing current branch and tags`);
           await git.push();
@@ -912,7 +928,6 @@ async function main() {
       core.info(`[git] No changes to push`);
     }
   }
-  console.log(core.summary.stringify());
   core.summary.write({ overwrite: true });
   process.exit(exitCode);
 }
