@@ -46515,6 +46515,7 @@ async function runTest(dir, packageManager) {
 
 async function lastVersionChange(git, file, version) {
   // Return the git tag or sha of the last commit as a reference to the version
+  core.info(`[${path.relative(process.cwd(), file) || '/'}] Looking for last version change for ${version}`);
   let strategy = 'version number';
   let commits = await git.log(['-L', `/version.*${version.replace(/\./g, '\\.')}.*"/:${file}`, '-n1', '--no-patch']);
   if (!commits.latest) {
@@ -46631,12 +46632,12 @@ async function main() {
       const sha = await lastVersionChange(git, packageJsonPath, pkg.version);
       const commits = await getCommitsAffecting(dir, sha);
       const requiredBump = getMostSignificantBump(commits);
-      core.info(`[${name}@${pkg.version}] Detected bump: ${requiredBump}`);
       if (bumped[name]?.bumpType && bumpPriority(bumped[name].bumpType) >= bumpPriority(requiredBump)) {
         core.info(`[${name}@${pkg.version}] Skipping ${pkg.name} because it was already bumped with a higher priority: ${bumped[name].bumpType}`);
         bumped[name] = { version: pkg.version, bumpType: requiredBump, sha };
         continue;
       }
+      core.info(`[${name}@${pkg.version}] Detected bump: ${requiredBump}`);
       // Detect if a version bump has already been made
       const commitSinceTarget = await getCommitsAffecting(dir, lastTargetRef);
       const alreadyBumped = await hasAlreadyBumped(commitSinceTarget, requiredBump);
