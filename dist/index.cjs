@@ -46756,7 +46756,7 @@ async function main() {
         { data: testFailures.includes(name) ? ':x:' : ':white_check_mark:' }
       ]),
     ]);
-    hasBumped = Object.values(bumped).some(b => b.bumpType !== 'patch');
+    hasBumped = Object.values(bumped).length;
 
     if (targetBranch && hasBumped) {
       const versionedBranch = interpolate(branchTemplate, {
