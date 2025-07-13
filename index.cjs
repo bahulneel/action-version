@@ -282,80 +282,381 @@ class ReferencePointStrategyFactory {
   }
 }
 
-// Strategy Pattern: Package Manager Detection Strategies
+// Strategy Pattern: Package Manager Operations
 class PackageManagerStrategy {
   constructor(name) {
     this.name = name;
   }
   
-  detect() {
-    throw new Error('Strategy must implement detect method');
+  isAvailable() {
+    throw new Error('Strategy must implement isAvailable method');
+  }
+  
+  async install(packageDir = '.') {
+    throw new Error('Strategy must implement install method');
+  }
+  
+  async test(packageDir = '.') {
+    throw new Error('Strategy must implement test method');
+  }
+  
+  async build(packageDir = '.') {
+    throw new Error('Strategy must implement build method');
+  }
+  
+  getInstallCommand(packageDir = '.') {
+    throw new Error('Strategy must implement getInstallCommand method');
+  }
+  
+  getTestCommand(packageDir = '.') {
+    throw new Error('Strategy must implement getTestCommand method');
   }
 }
 
-class YarnDetectionStrategy extends PackageManagerStrategy {
+class YarnPackageManagerStrategy extends PackageManagerStrategy {
   constructor() {
     super('yarn');
   }
   
-  detect() {
+  isAvailable() {
     try {
-      const fs = require('fs/promises');
-      fs.stat(path.join(process.cwd(), 'yarn.lock'));
-      return 'yarn';
+      const fs = require('fs');
+      return fs.existsSync(path.join(process.cwd(), 'yarn.lock'));
     } catch {
-      return null;
+      return false;
     }
+  }
+  
+  async install(packageDir = '.') {
+    const { execSync } = require('child_process');
+    const command = `cd ${packageDir} && yarn install`;
+    core.debug(`[${this.name}] Running: ${command}`);
+    return execSync(command, { stdio: 'inherit' });
+  }
+  
+  async test(packageDir = '.') {
+    const { execSync } = require('child_process');
+    try {
+      const command = `cd ${packageDir} && yarn test`;
+      core.debug(`[${this.name}] Running: ${command}`);
+      execSync(command, { stdio: 'inherit' });
+      return { success: true };
+    } catch (error) {
+      core.warning(`[${this.name}] Tests failed: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+  
+  async build(packageDir = '.') {
+    const { execSync } = require('child_process');
+    const command = `cd ${packageDir} && yarn build`;
+    core.debug(`[${this.name}] Running: ${command}`);
+    return execSync(command, { stdio: 'inherit' });
+  }
+  
+  getInstallCommand(packageDir = '.') {
+    return `cd ${packageDir} && yarn install`;
+  }
+  
+  getTestCommand(packageDir = '.') {
+    return `cd ${packageDir} && yarn test`;
   }
 }
 
-class NpmDetectionStrategy extends PackageManagerStrategy {
+class NpmPackageManagerStrategy extends PackageManagerStrategy {
   constructor() {
     super('npm');
   }
   
-  detect() {
+  isAvailable() {
     try {
-      const fs = require('fs/promises');
-      fs.stat(path.join(process.cwd(), 'package-lock.json'));
-      return 'npm';
+      const fs = require('fs');
+      return fs.existsSync(path.join(process.cwd(), 'package-lock.json')) || 
+             !fs.existsSync(path.join(process.cwd(), 'yarn.lock'));
     } catch {
-      return null;
+      return true; // NPM is default fallback
     }
+  }
+  
+  async install(packageDir = '.') {
+    const { execSync } = require('child_process');
+    const command = `cd ${packageDir} && npm install`;
+    core.debug(`[${this.name}] Running: ${command}`);
+    return execSync(command, { stdio: 'inherit' });
+  }
+  
+  async test(packageDir = '.') {
+    const { execSync } = require('child_process');
+    try {
+      const command = `cd ${packageDir} && npm test`;
+      core.debug(`[${this.name}] Running: ${command}`);
+      execSync(command, { stdio: 'inherit' });
+      return { success: true };
+    } catch (error) {
+      core.warning(`[${this.name}] Tests failed: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+  
+  async build(packageDir = '.') {
+    const { execSync } = require('child_process');
+    const command = `cd ${packageDir} && npm run build`;
+    core.debug(`[${this.name}] Running: ${command}`);
+    return execSync(command, { stdio: 'inherit' });
+  }
+  
+  getInstallCommand(packageDir = '.') {
+    return `cd ${packageDir} && npm install`;
+  }
+  
+  getTestCommand(packageDir = '.') {
+    return `cd ${packageDir} && npm test`;
   }
 }
 
-class PnpmDetectionStrategy extends PackageManagerStrategy {
+class PnpmPackageManagerStrategy extends PackageManagerStrategy {
   constructor() {
     super('pnpm');
   }
   
-  detect() {
+  isAvailable() {
     try {
-      const fs = require('fs/promises');
-      fs.stat(path.join(process.cwd(), 'pnpm-lock.yaml'));
-      return 'pnpm';
+      const fs = require('fs');
+      return fs.existsSync(path.join(process.cwd(), 'pnpm-lock.yaml'));
     } catch {
-      return null;
+      return false;
+    }
+  }
+  
+  async install(packageDir = '.') {
+    const { execSync } = require('child_process');
+    const command = `cd ${packageDir} && pnpm install`;
+    core.debug(`[${this.name}] Running: ${command}`);
+    return execSync(command, { stdio: 'inherit' });
+  }
+  
+  async test(packageDir = '.') {
+    const { execSync } = require('child_process');
+    try {
+      const command = `cd ${packageDir} && pnpm test`;
+      core.debug(`[${this.name}] Running: ${command}`);
+      execSync(command, { stdio: 'inherit' });
+      return { success: true };
+    } catch (error) {
+      core.warning(`[${this.name}] Tests failed: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  }
+  
+  async build(packageDir = '.') {
+    const { execSync } = require('child_process');
+    const command = `cd ${packageDir} && pnpm build`;
+    core.debug(`[${this.name}] Running: ${command}`);
+    return execSync(command, { stdio: 'inherit' });
+  }
+  
+  getInstallCommand(packageDir = '.') {
+    return `cd ${packageDir} && pnpm install`;
+  }
+  
+  getTestCommand(packageDir = '.') {
+    return `cd ${packageDir} && pnpm test`;
+  }
+}
+
+class PackageManagerFactory {
+  static strategies = [
+    new YarnPackageManagerStrategy(),
+    new PnpmPackageManagerStrategy(),
+    new NpmPackageManagerStrategy() // NPM as fallback
+  ];
+  
+  static getPackageManager() {
+    for (const strategy of this.strategies) {
+      if (strategy.isAvailable()) {
+        return strategy;
+      }
+    }
+    return new NpmPackageManagerStrategy(); // Default fallback
+  }
+}
+
+// Strategy Pattern: Git Operations
+class GitOperationStrategy {
+  constructor(name) {
+    this.name = name;
+  }
+  
+  async commitVersionChange(packageDir, packageName, version, bumpType, template) {
+    throw new Error('Strategy must implement commitVersionChange method');
+  }
+  
+  async commitDependencyUpdate(packageDir, packageName, depName, depVersion, template) {
+    throw new Error('Strategy must implement commitDependencyUpdate method');
+  }
+  
+  async tagVersion(version, isPrerelease, shouldTag) {
+    throw new Error('Strategy must implement tagVersion method');
+  }
+}
+
+class ConventionalCommitStrategy extends GitOperationStrategy {
+  constructor() {
+    super('conventional');
+  }
+  
+  async commitVersionChange(packageDir, packageName, version, bumpType, template) {
+    const relativePath = path.relative(process.cwd(), packageDir) || '.';
+    const packageJsonPath = path.join(packageDir, 'package.json');
+    
+    // Create conventional commit message
+    const msg = interpolate(template, {
+      package: packageName,
+      version: version,
+      bumpType: bumpType
+    });
+    
+    try {
+      core.debug(`[${relativePath}] Adding package.json to git`);
+      await git.add([packageJsonPath]);
+      
+      core.debug(`[${relativePath}] Committing: ${msg}`);
+      await git.commit(msg);
+      
+      core.debug(`[${relativePath}] Successfully committed version change`);
+    } catch (error) {
+      core.error(`[${relativePath}] Failed to commit version change: ${error.message}`);
+      throw new Error(`Failed to commit version change in ${relativePath}: ${error.message}`);
+    }
+  }
+  
+  async commitDependencyUpdate(packageDir, packageName, depName, depVersion, template) {
+    const relativePath = path.relative(process.cwd(), packageDir) || '.';
+    const packageJsonPath = path.join(packageDir, 'package.json');
+    
+    const msg = interpolate(template, {
+      package: packageName,
+      depPackage: depName,
+      depVersion: depVersion,
+      version: 'unknown', // We don't always have current version context
+      bumpType: 'patch'
+    });
+    
+    try {
+      core.debug(`[${relativePath}] Adding package.json to git`);
+      await git.add([packageJsonPath]);
+      
+      core.debug(`[${relativePath}] Committing: ${msg}`);
+      await git.commit(msg);
+      
+      core.debug(`[${relativePath}] Successfully committed dependency update`);
+    } catch (error) {
+      core.error(`[${relativePath}] Failed to commit dependency update: ${error.message}`);
+      throw new Error(`Failed to commit dependency update in ${relativePath}: ${error.message}`);
+    }
+  }
+  
+  async tagVersion(version, isPrerelease, shouldTag) {
+    const tagName = `v${version}`;
+    
+    if (!version) {
+      core.warning('No version found, skipping tag');
+      return;
+    }
+    
+    if (isPrerelease && !shouldTag) {
+      core.info(`Skipping prerelease tag ${tagName} (use tag-prereleases: true to enable)`);
+      return;
+    }
+    
+    try {
+      const existingTags = await git.tags();
+      if (existingTags.all.includes(tagName)) {
+        core.info(`Skipping tag ${tagName} because it already exists`);
+        return;
+      }
+      
+      if (isPrerelease) {
+        core.info(`Creating prerelease tag ${tagName}`);
+      } else {
+        core.info(`Creating release tag ${tagName}`);
+      }
+      
+      await git.addAnnotatedTag(tagName, `Release ${version}`);
+    } catch (error) {
+      core.error(`Failed to create tag ${tagName}: ${error.message}`);
+      throw new Error(`Failed to create tag ${tagName}: ${error.message}`);
     }
   }
 }
 
-class PackageManagerDetectionFactory {
-  static strategies = [
-    new YarnDetectionStrategy(),
-    new PnpmDetectionStrategy(),
-    new NpmDetectionStrategy() // NPM as fallback
-  ];
+class SimpleCommitStrategy extends GitOperationStrategy {
+  constructor() {
+    super('simple');
+  }
   
-  static detectPackageManager() {
-    for (const strategy of this.strategies) {
-      const result = strategy.detect();
-      if (result) {
-        return result;
-      }
+  async commitVersionChange(packageDir, packageName, version, bumpType, template) {
+    const relativePath = path.relative(process.cwd(), packageDir) || '.';
+    const packageJsonPath = path.join(packageDir, 'package.json');
+    
+    // Simple commit message
+    const msg = `Bump ${packageName} to ${version}`;
+    
+    try {
+      await git.add([packageJsonPath]);
+      await git.commit(msg);
+      core.debug(`[${relativePath}] Successfully committed simple version change`);
+    } catch (error) {
+      throw new Error(`Failed to commit version change in ${relativePath}: ${error.message}`);
     }
-    return 'npm'; // Default fallback
+  }
+  
+  async commitDependencyUpdate(packageDir, packageName, depName, depVersion, template) {
+    const relativePath = path.relative(process.cwd(), packageDir) || '.';
+    const packageJsonPath = path.join(packageDir, 'package.json');
+    
+    const msg = `Update ${depName} to ${depVersion} in ${packageName}`;
+    
+    try {
+      await git.add([packageJsonPath]);
+      await git.commit(msg);
+      core.debug(`[${relativePath}] Successfully committed simple dependency update`);
+    } catch (error) {
+      throw new Error(`Failed to commit dependency update in ${relativePath}: ${error.message}`);
+    }
+  }
+  
+  async tagVersion(version, isPrerelease, shouldTag) {
+    if (!version || (isPrerelease && !shouldTag)) return;
+    
+    const tagName = `v${version}`;
+    
+    try {
+      await git.addTag(tagName);
+      core.info(`Created simple tag ${tagName}`);
+    } catch (error) {
+      core.error(`Failed to create tag ${tagName}: ${error.message}`);
+    }
+  }
+}
+
+class GitOperationStrategyFactory {
+  static strategies = {
+    'conventional': new ConventionalCommitStrategy(),
+    'simple': new SimpleCommitStrategy()
+  };
+  
+  static getStrategy(strategyName = 'conventional') {
+    const strategy = this.strategies[strategyName];
+    if (!strategy) {
+      core.warning(`Unknown git strategy: ${strategyName}, falling back to conventional`);
+      return this.strategies['conventional'];
+    }
+    return strategy;
+  }
+  
+  static getAvailableStrategies() {
+    return Object.keys(this.strategies);
   }
 }
 
@@ -403,7 +704,7 @@ class Package {
     return await getVersionAtCommit(this.packageJsonPath, commitRef);
   }
 
-  async processVersionBump(referenceCommit, referenceVersion, strategy) {
+  async processVersionBump(referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy) {
     this.initializeVersion();
     
     core.info(`[${this.name}@${this.version}] Processing package`);
@@ -436,12 +737,9 @@ class Package {
       await this.save();
       
       const bumpType = semver.prerelease(nextVersion) ? 'prerelease' : commitBasedBump;
-      const msg = interpolate(commitMsgTemplate, {
-        package: this.name,
-        version: this.version,
-        bumpType: bumpType
-      });
-      await commit(this.dir, msg);
+      
+      // Use git strategy to commit the version change
+      await gitStrategy.commitVersionChange(this.dir, this.name, this.version, bumpType, commitMsgTemplate);
       
       const result = { 
         version: this.version, 
@@ -465,12 +763,8 @@ class Package {
       this.version = nextVersion;
       await this.save();
       
-      const msg = interpolate(commitMsgTemplate, {
-        package: this.name,
-        version: this.version,
-        bumpType: commitBasedBump
-      });
-      await commit(this.dir, msg);
+      // Use git strategy to commit the version change
+      await gitStrategy.commitVersionChange(this.dir, this.name, this.version, commitBasedBump, commitMsgTemplate);
       
       const result = { 
         version: this.version, 
@@ -487,7 +781,7 @@ class Package {
     return null;
   }
 
-  async finalizePrerelease(commitMsgTemplate) {
+  async finalizePrerelease(commitMsgTemplate, gitStrategy) {
     if (this.version && semver.prerelease(this.version)) {
       const finalVersion = finalizeVersion(this.version);
       core.info(`[${this.name}] Finalizing prerelease version: ${this.version} → ${finalVersion}`);
@@ -495,12 +789,8 @@ class Package {
       this.version = finalVersion;
       await this.save();
       
-      const msg = interpolate(commitMsgTemplate, {
-        package: this.name,
-        version: finalVersion,
-        bumpType: 'release'
-      });
-      await commit(this.dir, msg);
+      // Use git strategy to commit the finalization
+      await gitStrategy.commitVersionChange(this.dir, this.name, finalVersion, 'release', commitMsgTemplate);
       
       const result = { version: finalVersion, bumpType: 'release', sha: null };
       this.bumpResult = result;
@@ -509,7 +799,7 @@ class Package {
     return null;
   }
 
-  async updateDependency(depName, newVersion, depCommitMsgTemplate) {
+  async updateDependency(depName, newVersion, depCommitMsgTemplate, gitStrategy) {
     let updated = false;
     
     for (const depKey of depKeys) {
@@ -529,18 +819,22 @@ class Package {
     if (updated) {
       await this.save();
       
-      const msg = interpolate(depCommitMsgTemplate, {
-        package: this.name,
-        depPackage: depName,
-        depVersion: newVersion,
-        version: this.version,
-        bumpType: 'patch',
-      });
-      await commit(this.dir, msg);
+      // Use git strategy to commit the dependency update
+      await gitStrategy.commitDependencyUpdate(this.dir, this.name, depName, newVersion, depCommitMsgTemplate);
       core.info(`[${this.name}] Updated dependencies for ${depName}`);
     }
     
     return updated;
+  }
+  
+  async testCompatibility(packageManager) {
+    try {
+      const testResult = await packageManager.test(this.dir);
+      return testResult;
+    } catch (error) {
+      core.warning(`[${this.name}] Test execution failed: ${error.message}`);
+      return { success: false, error: error.message };
+    }
   }
 }
 
@@ -640,12 +934,12 @@ async function determineReferencePoint(baseBranch, activeBranch) {
   return result;
 }
 
-async function processWorkspacePackages(packages, referenceCommit, referenceVersion, strategy, commitMsgTemplate, depCommitMsgTemplate) {
+async function processWorkspacePackages(packages, referenceCommit, referenceVersion, strategy, commitMsgTemplate, depCommitMsgTemplate, gitStrategy, packageManager) {
   const bumped = {};
   const testFailures = [];
   
   for (const pkg of packages) {
-    const result = await pkg.processVersionBump(referenceCommit, referenceVersion, strategy);
+    const result = await pkg.processVersionBump(referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy);
     if (result) {
       bumped[pkg.name] = result;
     }
@@ -656,11 +950,11 @@ async function processWorkspacePackages(packages, referenceCommit, referenceVers
     if (bumped[pkg.name]) {
       for (const siblingPkg of packages) {
         if (siblingPkg.name !== pkg.name) {
-          const updated = await siblingPkg.updateDependency(pkg.name, pkg.version, depCommitMsgTemplate);
+          const updated = await siblingPkg.updateDependency(pkg.name, pkg.version, depCommitMsgTemplate, gitStrategy);
           
           if (updated && bumped[pkg.name].bumpType === 'major') {
-            // Test major version compatibility
-            const testResult = await testPackage(siblingPkg.dir);
+            // Test major version compatibility using package manager strategy
+            const testResult = await siblingPkg.testCompatibility(packageManager);
             if (!testResult.success) {
               core.warning(`[${siblingPkg.name}] Tests failed after major bump of ${pkg.name}, locking to previous version`);
               testFailures.push(siblingPkg.name);
@@ -683,14 +977,14 @@ async function processWorkspacePackages(packages, referenceCommit, referenceVers
   return { bumped, testFailures };
 }
 
-async function finalizePackageVersions(packages, rootPkg, commitMsgTemplate) {
+async function finalizePackageVersions(packages, rootPkg, commitMsgTemplate, gitStrategy) {
   const bumped = {};
   let hasBumped = false;
   
   core.info(`[root] Finalizing prerelease versions for base branch update`);
   
   for (const pkg of packages) {
-    const result = await pkg.finalizePrerelease(commitMsgTemplate);
+    const result = await pkg.finalizePrerelease(commitMsgTemplate, gitStrategy);
     if (result) {
       bumped[pkg.name] = result;
       hasBumped = true;
@@ -706,12 +1000,8 @@ async function finalizePackageVersions(packages, rootPkg, commitMsgTemplate) {
     const rootPackageJsonPath = path.join(process.cwd(), 'package.json');
     await writeJSON(rootPackageJsonPath, rootPkg);
     
-    const msg = interpolate(commitMsgTemplate, {
-      package: rootPkg.name || 'root',
-      version: finalVersion,
-      bumpType: 'release'
-    });
-    await commit(process.cwd(), msg);
+    // Use git strategy to commit the root finalization
+    await gitStrategy.commitVersionChange(process.cwd(), rootPkg.name || 'root', finalVersion, 'release', commitMsgTemplate);
     
     bumped[rootPkg.name] = { version: finalVersion, bumpType: 'release', sha: null };
     hasBumped = true;
@@ -720,10 +1010,9 @@ async function finalizePackageVersions(packages, rootPkg, commitMsgTemplate) {
   if (hasBumped) {
     core.info(`[root] Prerelease finalization complete`);
     
-    // Create release tags for finalized versions
+    // Create release tags for finalized versions using git strategy
     if (rootPkg.version) {
-      const lastTag = await git.tags(['--sort=-v:refname']).latest;
-      await tagVersion(lastTag, rootPkg.version, true); // Force tagging for finalized releases
+      await gitStrategy.tagVersion(rootPkg.version, false, true); // Force tagging for finalized releases
     }
   } else {
     core.info(`[root] No prerelease versions found to finalize`);
@@ -732,7 +1021,7 @@ async function finalizePackageVersions(packages, rootPkg, commitMsgTemplate) {
   return { bumped, hasBumped };
 }
 
-async function processRootPackage(rootPkg, bumped, referenceCommit, referenceVersion, strategy, commitMsgTemplate) {
+async function processRootPackage(rootPkg, bumped, referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy) {
   if (!rootPkg.workspaces) {
     return { bumped, hasBumped: false };
   }
@@ -773,12 +1062,9 @@ async function processRootPackage(rootPkg, bumped, referenceCommit, referenceVer
       await writeJSON(rootPackageJsonPath, rootPkg);
       
       const bumpType = semver.prerelease(nextVersion) ? 'prerelease' : workspaceBump;
-      const msg = interpolate(commitMsgTemplate, {
-        package: rootPkg.name || 'root',
-        version: rootPkg.version,
-        bumpType: bumpType
-      });
-      await commit(process.cwd(), msg);
+      
+      // Use git strategy to commit the root version change
+      await gitStrategy.commitVersionChange(process.cwd(), rootPkg.name || 'root', rootPkg.version, bumpType, commitMsgTemplate);
       
       bumped[rootPkg.name] = { version: rootPkg.version, bumpType: bumpType, sha: null };
       hasBumped = true;
@@ -797,12 +1083,8 @@ async function processRootPackage(rootPkg, bumped, referenceCommit, referenceVer
     rootPkg.version = nextVersion;
     await writeJSON(rootPackageJsonPath, rootPkg);
     
-    const msg = interpolate(commitMsgTemplate, {
-      package: rootPkg.name || 'root',
-      version: rootPkg.version,
-      bumpType: workspaceBump
-    });
-    await commit(process.cwd(), msg);
+    // Use git strategy to commit the root version change
+    await gitStrategy.commitVersionChange(process.cwd(), rootPkg.name || 'root', rootPkg.version, workspaceBump, commitMsgTemplate);
     
     bumped[rootPkg.name] = { version: rootPkg.version, bumpType: workspaceBump, sha: null };
     hasBumped = true;
@@ -886,7 +1168,7 @@ async function generateSummary(bumped, testFailures, strategy, activeBranch, bas
   return { totalPackages, releasePackages, prereleasePackages, finalizedPackages };
 }
 
-async function handleBranchOperations(newBranch, hasBumped, rootPkg, branchTemplate, branchCleanup, templateRegex, tagPrereleases) {
+async function handleBranchOperations(newBranch, hasBumped, rootPkg, branchTemplate, branchCleanup, templateRegex, tagPrereleases, gitStrategy) {
   let outputBranch = newBranch;
   
   // Branch and tag handling
@@ -915,8 +1197,8 @@ async function handleBranchOperations(newBranch, hasBumped, rootPkg, branchTempl
     const rootBump = guessBumpType(rootPkg.version);
     await cleanupStrategy.execute(branches, versionedBranch, templateRegex, rootBump);
   } else {
-    const lastTag = await git.tags(['--sort=-v:refname']).latest;
-    await tagVersion(lastTag, rootPkg.version, tagPrereleases);
+    // Use git strategy to create tags
+    await gitStrategy.tagVersion(rootPkg.version, semver.prerelease(rootPkg.version), tagPrereleases);
   }
   
   return outputBranch;
@@ -927,7 +1209,18 @@ function interpolate(template, vars) {
 }
 
 function getPackageManager() {
-  return PackageManagerDetectionFactory.detectPackageManager();
+  return PackageManagerFactory.getPackageManager();
+}
+
+async function testPackage(packageDir) {
+  const packageManager = getPackageManager();
+  try {
+    const testResult = await packageManager.test(packageDir);
+    return testResult;
+  } catch (error) {
+    core.warning(`Test execution failed for ${packageDir}: ${error.message}`);
+    return { success: false, error: error.message };
+  }
 }
 
 async function readJSON(file) {
@@ -1284,6 +1577,11 @@ async function main() {
     const rootDir = process.cwd();
     const rootPkg = await readJSON(path.join(rootDir, "package.json"));
     const packageManager = getPackageManager();
+    
+    // Initialize strategies
+    const gitStrategy = GitOperationStrategyFactory.getStrategy('conventional');
+    core.info(`[config] Package manager: ${packageManager.name}`);
+    core.info(`[config] Git strategy: ${gitStrategy.name}`);
 
     // Step 4: Determine reference point for version comparison
     const { referenceCommit, referenceVersion, shouldFinalizeVersions } = 
@@ -1306,19 +1604,19 @@ async function main() {
 
     // Step 6: Handle prerelease finalization or normal processing
     if (shouldFinalizeVersions) {
-      const result = await finalizePackageVersions(packages, rootPkg, commitMsgTemplate);
+      const result = await finalizePackageVersions(packages, rootPkg, commitMsgTemplate, gitStrategy);
       bumped = result.bumped;
       hasBumped = result.hasBumped;
     } else {
       // Step 6a: Process workspace packages
       const workspaceResult = await processWorkspacePackages(
-        packages, referenceCommit, referenceVersion, strategy, commitMsgTemplate, depCommitMsgTemplate);
+        packages, referenceCommit, referenceVersion, strategy, commitMsgTemplate, depCommitMsgTemplate, gitStrategy, packageManager);
       bumped = workspaceResult.bumped;
       testFailures = workspaceResult.testFailures;
       hasBumped = Object.keys(bumped).length > 0;
 
       // Step 6b: Process root package
-      const rootResult = await processRootPackage(rootPkg, bumped, referenceCommit, referenceVersion, strategy, commitMsgTemplate);
+      const rootResult = await processRootPackage(rootPkg, bumped, referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy);
       bumped = rootResult.bumped;
       if (rootResult.hasBumped) hasBumped = true;
     }
@@ -1327,7 +1625,7 @@ async function main() {
     await generateSummary(bumped, testFailures, strategy, activeBranch, baseBranch, tagPrereleases, shouldFinalizeVersions);
 
     // Step 8: Handle branch operations and cleanup
-    outputBranch = await handleBranchOperations(newBranch, hasBumped, rootPkg, branchTemplate, branchCleanup, templateRegex, tagPrereleases);
+    outputBranch = await handleBranchOperations(newBranch, hasBumped, rootPkg, branchTemplate, branchCleanup, templateRegex, tagPrereleases, gitStrategy);
     
     // Step 9: Final validation and completion
     if (hasBumped) {
