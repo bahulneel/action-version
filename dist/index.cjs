@@ -46537,6 +46537,11 @@ function deleteRemoteBranch(branch) {
   } catch { }
 }
 
+async function lastNonMergeCommit(git, branch) {
+  const commits = await git.log(['--no-merges', '-n1', branch]);
+  return commits.latest.hash;
+}
+
 async function main() {
   let exitCode = 0;
   let targetBranch = undefined;
@@ -46560,7 +46565,7 @@ async function main() {
 
     if (branchTarget) {
       const branch = branchTarget.startsWith('origin/') ? branchTarget : `origin/${branchTarget}`;
-      lastTargetCommit = await git.raw('rev-parse', branch);
+      lastTargetCommit = await lastNonMergeCommit(git, branch);
       lastTargetCommit = lastTargetCommit.trim();
       core.info(`[root] Last target commit: ${branch}@${lastTargetCommit}`);
     } else {
@@ -46726,7 +46731,6 @@ async function main() {
       const versionedBranch = interpolate(branchTemplate, {
         version: rootPkg.version
       })
-      core.info(`[root] Checking out ${versionedBranch} from ${targetBranch}`);
       const remoteVersionedBranch = `origin/${versionedBranch}`;
       const branches = await git.branch(['--list', '--remote']);
       if (branches.all.includes(remoteVersionedBranch)) {
