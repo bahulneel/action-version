@@ -46471,7 +46471,7 @@ async function getCommitsAffecting(dir, sinceRef) {
   // Get all commits affecting this dir since the last tag
   let range = sinceRef ? `${sinceRef}..HEAD` : 'HEAD';
   const log = await git.log([range, '--pretty=medium', '--', dir]);
-  const commits = parseCommits(log, sinceRef);
+  const commits = parseCommits(log.all, sinceRef);
   core.info(`[${path.relative(process.cwd(), dir) || '/'}] ${commits.length} commits affecting since ${sinceRef}`);
   return commits;
 }
