@@ -20,7 +20,7 @@
 **Changes:**
 - Add new action inputs to `action.yml`:
   - `same_type_bump_strategy` ('do-nothing' | 'apply-bump' | 'pre-release')
-  - `source_branch` (default: 'develop')
+  - `branch` (default: 'develop')
   - `force_prerelease_tags` (default: false)
 - Update input parsing in main function
 - Create configuration validation logic

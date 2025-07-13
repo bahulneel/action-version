@@ -22,16 +22,16 @@ inputs:
     description: "Strategy for cleaning up versioned branches: 'keep' (keep all), 'prune' (keep latest only), or 'semantic' (keep same bump type only)."
     required: false
     default: "keep"
-  target-branch:
-    description: "The target branch to compare commits against."
+  base:
+    description: "The base branch to compare commits against."
     required: false
     default: "main"
   strategy:
     description: "Strategy for same-type incremental changes: 'do-nothing' (skip), 'apply-bump' (normal semver), or 'pre-release' (use prerelease versions)."
     required: false
     default: "do-nothing"
-  source-branch:
-    description: "Source branch for detecting target branch updates and prerelease finalization."
+  branch:
+    description: "Active branch for detecting base branch updates and prerelease finalization."
     required: false
     default: "develop"
   tag-prereleases:

@@ -27,8 +27,8 @@ Add this action to your workflow:
     
     # Optional: branch workflow
     # create-branch: true
-    # target-branch: 'main'
-    # source-branch: 'develop'
+    # base: 'main'
+# branch: 'develop'
     
     # Optional: tagging
     # tag-prereleases: false
@@ -44,8 +44,8 @@ Add this action to your workflow:
 | create-branch             | Create a separate branch for version updates        | false                                                          |
 | branch-template           | Template for branch name when creating branches     | release/${version}                                             |
 | branch-cleanup            | Strategy for cleaning up versioned branches         | keep                                                           |
-| target-branch             | Target branch to compare commits against            | main                                                           |
-| source-branch             | Source branch for prerelease finalization           | develop                                                        |
+| base                      | Base branch to compare commits against              | main                                                           |
+| branch                    | Active branch for prerelease finalization          | develop                                                        |
 | tag-prereleases           | Create git tags for prerelease versions             | false                                                          |
 
 ## Strategy Options

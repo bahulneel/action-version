@@ -49423,11 +49423,11 @@ async function main() {
     const branchTemplate = core.getInput('branch-template') || 'release/${version}';
     const templateRegex = new RegExp(branchTemplate.replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'));
     const branchCleanup = core.getInput('branch-cleanup') || 'keep';
-    const targetBranch = core.getInput('target-branch') || shouldCreateBranch ? 'main' : undefined;
+    const baseBranch = core.getInput('base') || shouldCreateBranch ? 'main' : undefined;
     
     // Strategy and workflow inputs
     const strategy = core.getInput('strategy') || 'do-nothing';
-    const sourceBranch = core.getInput('source-branch') || 'develop';
+    const activeBranch = core.getInput('branch') || 'develop';
     const tagPrereleases = core.getInput('tag-prereleases') === 'true';
     
     // Validate configuration inputs
@@ -49436,21 +49436,21 @@ async function main() {
       throw new Error(`Invalid strategy: ${strategy}. Must be one of: ${validStrategies.join(', ')}`);
     }
     
-    if (sourceBranch && sourceBranch.trim() === '') {
-      throw new Error('source-branch cannot be empty if provided');
+    if (activeBranch && activeBranch.trim() === '') {
+      throw new Error('branch cannot be empty if provided');
     }
     
-    if (targetBranch && targetBranch.trim() === '') {
-      throw new Error('target-branch cannot be empty if provided');
+    if (baseBranch && baseBranch.trim() === '') {
+      throw new Error('base cannot be empty if provided');
     }
     
     // Validate branch compatibility
-    if (strategy === 'pre-release' && !targetBranch) {
-      core.warning('Using pre-release strategy without target-branch - prerelease finalization will not be available');
+    if (strategy === 'pre-release' && !baseBranch) {
+      core.warning('Using pre-release strategy without base - prerelease finalization will not be available');
     }
     
     core.info(`[config] Strategy: ${strategy}`);
-    core.info(`[config] Source branch: ${sourceBranch}`);
+    core.info(`[config] Active branch: ${activeBranch}`);
     core.info(`[config] Tag prereleases: ${tagPrereleases}`);
 
     try {
@@ -49467,24 +49467,24 @@ async function main() {
     let referenceVersion;
     let shouldFinalizeVersions = false;
     
-    // Check if we should finalize prerelease versions (target branch update scenario)
-    if (targetBranch && sourceBranch) {
+    // Check if we should finalize prerelease versions (base branch update scenario)
+    if (baseBranch && activeBranch) {
       try {
-        const sourceCommit = await lastNonMergeCommit(git, `origin/${sourceBranch}`);
-        const targetCommit = await lastNonMergeCommit(git, `origin/${targetBranch}`);
+        const activeCommit = await lastNonMergeCommit(git, `origin/${activeBranch}`);
+        const baseCommit = await lastNonMergeCommit(git, `origin/${baseBranch}`);
         
-        if (sourceCommit === targetCommit) {
-          core.info(`[root] Source and target branches are at same commit - checking for prerelease finalization`);
+        if (activeCommit === baseCommit) {
+          core.info(`[root] Active and base branches are at same commit - checking for prerelease finalization`);
           shouldFinalizeVersions = true;
         }
       } catch (error) {
-        core.debug(`Could not compare source/target branches: ${error.message}`);
+        core.debug(`Could not compare active/base branches: ${error.message}`);
       }
     }
     
-    if (targetBranch) {
-      core.info(`[root] Using branch target: ${targetBranch}`);
-      const branch = targetBranch.startsWith('origin/') ? targetBranch : `origin/${targetBranch}`;
+    if (baseBranch) {
+      core.info(`[root] Using branch base: ${baseBranch}`);
+      const branch = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`;
       referenceCommit = await lastNonMergeCommit(git, branch);
       referenceCommit = referenceCommit.trim();
       
@@ -49509,24 +49509,24 @@ async function main() {
     
     core.info(`[root] Reference: ${referenceCommit} (version: ${referenceVersion})`);
 
-    const branch =
+    const currentBranch =
       process.env.GITHUB_HEAD_REF ||
       process.env.GITHUB_REF_NAME ||
       'main'; // fallback
 
-    targetBranch = shouldCreateBranch ? interpolate(branchTemplate, {
-      version: branch
+    const newBranch = shouldCreateBranch ? interpolate(branchTemplate, {
+      version: currentBranch
     }) : undefined;
 
     try {
-      if (targetBranch) {
-        core.info(`[git] Checking out ${targetBranch} from ${branch}`);
-        await git.checkoutBranch(targetBranch, branch);
-        core.debug(`[git] Successfully checked out ${targetBranch}`);
+      if (newBranch) {
+        core.info(`[git] Checking out ${newBranch} from ${currentBranch}`);
+        await git.checkoutBranch(newBranch, currentBranch);
+        core.debug(`[git] Successfully checked out ${newBranch}`);
       } else {
-        core.info(`[git] Checking out ${branch}`);
-        await git.checkout(branch);
-        core.debug(`[git] Successfully checked out ${branch}`);
+        core.info(`[git] Checking out ${currentBranch}`);
+        await git.checkout(currentBranch);
+        core.debug(`[git] Successfully checked out ${currentBranch}`);
       }
     } catch (error) {
       core.error(`[git] Failed to checkout branch: ${error.message}`);

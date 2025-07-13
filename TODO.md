@@ -102,7 +102,7 @@ same_type_bump_strategy: 'do-nothing' | 'apply-bump' | 'pre-release'
 
 **New Input:**
 ```yaml
-source_branch: 'develop' # Default branch to compare against
+branch: 'develop' # Default branch to compare against
 ```
 
 **Logic:**
@@ -192,7 +192,7 @@ const rootOnlyCommits = await getRootOnlyCommits(rootDir, pkgDirs, rootLastVersi
 
 ### New Configuration Options
 - [ ] Add `same_type_bump_strategy` input ('do-nothing' | 'apply-bump' | 'pre-release')
-- [ ] Add `source_branch` input (default: 'develop')
+- [ ] Add `branch` input (default: 'develop')
 - [ ] Add `force_prerelease_tags` input (default: false)
 
 ### Strategy Implementation
