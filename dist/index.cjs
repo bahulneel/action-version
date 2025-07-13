@@ -46553,13 +46553,16 @@ async function main() {
     const branchTemplate = core.getInput('branch_template') || 'release/${version}';
     const templateRegex = new RegExp(branchTemplate.replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'));
     const branchDeletion = core.getInput('branch_deletion') || 'keep';
-    const branchTarget = core.getInput('branch_target') || 'main';
+    const branchTarget = core.getInput('branch_target') || shouldCreateBranch ? 'main' : undefined;
     let lastTargetCommit;
 
     if (branchTarget) {
       const branch = branchTarget.startsWith('origin/') ? branchTarget : `origin/${branchTarget}`;
       lastTargetCommit = await git.raw('rev-parse', branch);
+      lastTargetCommit = lastTargetCommit.trim();
       core.info(`[root] Last target commit: ${branch}@${lastTargetCommit}`);
+    } else {
+      lastTargetCommit = await git.tags(['--sort=-v:refname']).latest;
     }
 
     const branch =
