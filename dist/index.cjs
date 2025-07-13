@@ -46557,25 +46557,9 @@ async function main() {
     let lastTargetCommit;
 
     if (branchTarget) {
-      core.info(`[root] Checking out ${branchTarget}`);
-      const branches = await git.branch()
-      if (branches.all.includes(branchTarget)) {
-        await git.checkout(branchTarget);
-      } else {
-        await git.checkoutBranch(branchTarget, branchTarget);
-      }
-      const commits = await git.log();
-      if (!commits.latest) {
-        core.error(`[root] No commits found in ${branchTarget}`);
-        process.exit(1);
-      }
-      const commit = commits.latest;
-      if (!commit) {
-        core.error(`[root] No commits found in ${branchTarget}`);
-        process.exit(1);
-      }
-      core.info(`[root] Last commit in ${branchTarget}: ${commit.hash}`);
-      lastTargetCommit = commit.hash;
+      const branch = branchTarget.startsWith('origin/') ? branchTarget : `origin/${branchTarget}`;
+      lastTargetCommit = await git.raw('rev-parse', branch);
+      core.info(`[root] Last target commit: ${branch}@${lastTargetCommit}`);
     }
 
     const branch =
