@@ -197,22 +197,76 @@ async function getCommitsAffecting(dir, sinceRef) {
   return commits;
 }
 
-async function commit(dir, msg) {
-  await git.add([path.join(dir, 'package.json')]);
-  await git.commit(msg);
+// Get commits affecting root directory but excluding workspace directories
+async function getRootOnlyCommits(rootDir, workspaceDirs, sinceRef) {
+  let range = sinceRef ? `${sinceRef}..HEAD` : 'HEAD';
+  
+  // Build pathspec to exclude workspace directories
+  const pathspecs = ['.'];
+  for (const wsDir of workspaceDirs) {
+    const relativePath = path.relative(rootDir, wsDir);
+    if (relativePath && !relativePath.startsWith('..')) {
+      pathspecs.push(`:!${relativePath}`);
+      pathspecs.push(`:!${relativePath}/**`);
+    }
+  }
+  
+  core.debug(`[root] Git pathspecs for root-only commits: ${pathspecs.join(' ')}`);
+  
+  try {
+    const log = await git.log([range, '--', ...pathspecs]);
+    const commits = parseCommits(log.all, sinceRef);
+    core.info(`[root] ${commits.length} root-only commits since ${sinceRef} (excluding ${workspaceDirs.length} workspaces)`);
+    return commits;
+  } catch (error) {
+    core.warning(`Failed to get root-only commits, falling back to all commits: ${error.message}`);
+    // Fallback to regular commit detection
+    return await getCommitsAffecting(rootDir, sinceRef);
+  }
 }
 
-async function tagVersion(lastTag, version) {
+async function commit(dir, msg) {
+  const relativePath = path.relative(process.cwd(), dir) || '.';
+  const packageJsonPath = path.join(dir, 'package.json');
+  
+  try {
+    core.debug(`[${relativePath}] Adding package.json to git`);
+    await git.add([packageJsonPath]);
+    
+    core.debug(`[${relativePath}] Committing: ${msg}`);
+    await git.commit(msg);
+    
+    core.debug(`[${relativePath}] Successfully committed changes`);
+  } catch (error) {
+    core.error(`[${relativePath}] Failed to commit changes: ${error.message}`);
+    throw new Error(`Failed to commit changes in ${relativePath}: ${error.message}`);
+  }
+}
+
+async function tagVersion(lastTag, version, forcePrereleaseTags = false) {
   const tagName = `v${version}`;
   if (!version) {
     core.warning('No version found, skipping tag');
     return;
   }
+  
+  // Skip prerelease versions unless forced
+  if (semver.prerelease(version) && !forcePrereleaseTags) {
+    core.info(`Skipping prerelease tag ${tagName} (use force_prerelease_tags: true to enable)`);
+    return;
+  }
+  
   if (lastTag && lastTag === tagName) {
     core.info(`Skipping tag ${tagName} because it already exists`);
     return;
   }
-  core.info(`Tagging ${version}`);
+  
+  if (semver.prerelease(version)) {
+    core.info(`Creating prerelease tag ${tagName}`);
+  } else {
+    core.info(`Creating release tag ${tagName}`);
+  }
+  
   await git.addTag(tagName);
 }
 
@@ -233,37 +287,55 @@ async function runTest(dir, packageManager) {
 
 // Simplified: Find when a package version was last changed
 async function getLastVersionChangeCommit(packageJsonPath) {
+  const relativePath = path.relative(process.cwd(), packageJsonPath);
+  
   try {
     // Use git log to find the last commit that changed the version field
+    core.debug(`[${relativePath}] Searching for version field changes using git log -L`);
     const commits = await git.log(['-L', '/version/:' + packageJsonPath, '-n1', '--no-patch']);
     if (commits.latest) {
-      core.info(`[${path.relative(process.cwd(), packageJsonPath)}] Last version change: ${commits.latest.hash}`);
+      core.info(`[${relativePath}] Last version change: ${commits.latest.hash} (strategy: version field)`);
       return commits.latest.hash;
     }
   } catch (error) {
-    core.debug(`Could not find version change for ${packageJsonPath}: ${error.message}`);
+    core.debug(`[${relativePath}] Version field search failed: ${error.message}`);
   }
   
   // Fallback: use file creation
   try {
+    core.debug(`[${relativePath}] Falling back to file creation commit`);
     const commits = await git.log(['-n1', '--no-patch', '--', packageJsonPath]);
     if (commits.latest) {
-      core.info(`[${path.relative(process.cwd(), packageJsonPath)}] Using file creation: ${commits.latest.hash}`);
+      core.info(`[${relativePath}] Using file creation: ${commits.latest.hash} (strategy: file creation fallback)`);
       return commits.latest.hash;
     }
   } catch (error) {
+    core.error(`[${relativePath}] File creation search failed: ${error.message}`);
     throw new Error(`Could not establish base commit for ${packageJsonPath}: ${error.message}`);
   }
+  
+  throw new Error(`[${relativePath}] No commits found for package.json file`);
 }
 
 // Get version at a specific commit
 async function getVersionAtCommit(packageJsonPath, commitRef) {
+  const relativePath = path.relative(process.cwd(), packageJsonPath);
+  
   try {
-    const content = await git.show([`${commitRef}:${path.relative(process.cwd(), packageJsonPath)}`]);
+    core.debug(`[${relativePath}] Getting version at commit ${commitRef}`);
+    const content = await git.show([`${commitRef}:${relativePath}`]);
     const pkg = JSON.parse(content);
-    return semver.coerce(pkg.version) || '0.0.0';
+    const version = semver.coerce(pkg.version) || '0.0.0';
+    core.debug(`[${relativePath}] Version at ${commitRef}: ${version}`);
+    return version;
   } catch (error) {
-    core.warning(`Could not get version at commit ${commitRef} for ${packageJsonPath}: ${error.message}`);
+    if (error.message.includes('does not exist')) {
+      core.warning(`[${relativePath}] File did not exist at commit ${commitRef}, using default version 0.0.0`);
+    } else if (error.message.includes('bad revision')) {
+      core.warning(`[${relativePath}] Invalid commit reference ${commitRef}, using default version 0.0.0`);
+    } else {
+      core.warning(`[${relativePath}] Could not get version at commit ${commitRef}: ${error.message}, using default version 0.0.0`);
+    }
     return '0.0.0';
   }
 }
@@ -289,8 +361,18 @@ function deleteRemoteBranch(branch) {
 }
 
 async function lastNonMergeCommit(git, branch) {
-  const commits = await git.log(['--no-merges', '-n1', branch]);
-  return commits.latest.hash;
+  try {
+    core.debug(`Getting last non-merge commit from branch: ${branch}`);
+    const commits = await git.log(['--no-merges', '-n1', branch]);
+    if (!commits.latest) {
+      throw new Error(`No commits found in branch ${branch}`);
+    }
+    core.debug(`Last non-merge commit in ${branch}: ${commits.latest.hash}`);
+    return commits.latest.hash;
+  } catch (error) {
+    core.error(`Failed to get last non-merge commit from ${branch}: ${error.message}`);
+    throw new Error(`Failed to get last non-merge commit from ${branch}: ${error.message}`);
+  }
 }
 
 async function main() {
@@ -318,21 +400,57 @@ async function main() {
     const sourceBranch = core.getInput('source_branch') || 'develop';
     const forcePrereleaseTags = core.getInput('force_prerelease_tags') === 'true';
     
-    // Validate strategy input
+    // Validate configuration inputs
     const validStrategies = ['do-nothing', 'apply-bump', 'pre-release'];
     if (!validStrategies.includes(sameTypeBumpStrategy)) {
       throw new Error(`Invalid same_type_bump_strategy: ${sameTypeBumpStrategy}. Must be one of: ${validStrategies.join(', ')}`);
+    }
+    
+    if (sourceBranch && sourceBranch.trim() === '') {
+      throw new Error('source_branch cannot be empty if provided');
+    }
+    
+    if (branchTarget && branchTarget.trim() === '') {
+      throw new Error('branch_target cannot be empty if provided');
+    }
+    
+    // Validate branch compatibility
+    if (sameTypeBumpStrategy === 'pre-release' && !branchTarget) {
+      core.warning('Using pre-release strategy without branch_target - prerelease finalization will not be available');
     }
     
     core.info(`[config] Same-type bump strategy: ${sameTypeBumpStrategy}`);
     core.info(`[config] Source branch: ${sourceBranch}`);
     core.info(`[config] Force prerelease tags: ${forcePrereleaseTags}`);
 
-    await git.fetch(['--prune', 'origin']);
+    try {
+      core.debug(`[git] Fetching latest changes from origin`);
+      await git.fetch(['--prune', 'origin']);
+      core.debug(`[git] Successfully fetched from origin`);
+    } catch (error) {
+      core.warning(`[git] Failed to fetch from origin: ${error.message}`);
+      // Continue execution - this is not always fatal
+    }
 
     // Step 1: Find starting version number and commit ref
     let referenceCommit;
     let referenceVersion;
+    let shouldFinalizeVersions = false;
+    
+    // Check if we should finalize prerelease versions (target branch update scenario)
+    if (branchTarget && sourceBranch) {
+      try {
+        const sourceCommit = await lastNonMergeCommit(git, `origin/${sourceBranch}`);
+        const targetCommit = await lastNonMergeCommit(git, `origin/${branchTarget}`);
+        
+        if (sourceCommit === targetCommit) {
+          core.info(`[root] Source and target branches are at same commit - checking for prerelease finalization`);
+          shouldFinalizeVersions = true;
+        }
+      } catch (error) {
+        core.debug(`Could not compare source/target branches: ${error.message}`);
+      }
+    }
     
     if (branchTarget) {
       core.info(`[root] Using branch target: ${branchTarget}`);
@@ -370,11 +488,19 @@ async function main() {
       version: branch
     }) : undefined;
 
-    if (targetBranch) {
-      core.info(`[root] Checking out ${targetBranch} from ${branch}`);
-      await git.checkoutBranch(targetBranch, branch);
-    } else {
-      await git.checkout(branch);
+    try {
+      if (targetBranch) {
+        core.info(`[git] Checking out ${targetBranch} from ${branch}`);
+        await git.checkoutBranch(targetBranch, branch);
+        core.debug(`[git] Successfully checked out ${targetBranch}`);
+      } else {
+        core.info(`[git] Checking out ${branch}`);
+        await git.checkout(branch);
+        core.debug(`[git] Successfully checked out ${branch}`);
+      }
+    } catch (error) {
+      core.error(`[git] Failed to checkout branch: ${error.message}`);
+      throw new Error(`Failed to checkout branch: ${error.message}`);
     }
 
     // Discover all packages and build dependency graph
@@ -385,8 +511,71 @@ async function main() {
     const bumped = {};
     let testFailures = [];
 
-    // Step 2: For each package, determine if it needs bumping
-    for (const name of order) {
+    // Handle prerelease version finalization if needed
+    if (shouldFinalizeVersions) {
+      core.info(`[root] Finalizing prerelease versions for target branch update`);
+      
+      for (const name of order) {
+        const { dir, pkg } = graph[name];
+        const packageJsonPath = path.join(dir, 'package.json');
+        
+        if (pkg.version && semver.prerelease(pkg.version)) {
+          const finalVersion = finalizeVersion(pkg.version);
+          core.info(`[${name}] Finalizing prerelease version: ${pkg.version} → ${finalVersion}`);
+          
+          pkg.version = finalVersion;
+          await writeJSON(packageJsonPath, pkg);
+          
+          const msg = interpolate(commitMsgTemplate, {
+            package: pkg.name,
+            version: finalVersion,
+            bumpType: 'release'
+          });
+          await commit(dir, msg);
+          
+          bumped[name] = { version: finalVersion, bumpType: 'release', sha: null };
+          hasBumped = true;
+        }
+      }
+      
+      // Finalize root package if it's a prerelease
+      if (rootPkg.version && semver.prerelease(rootPkg.version)) {
+        const finalVersion = finalizeVersion(rootPkg.version);
+        core.info(`[root] Finalizing prerelease version: ${rootPkg.version} → ${finalVersion}`);
+        
+        rootPkg.version = finalVersion;
+        const rootPackageJsonPath = path.join(rootDir, 'package.json');
+        await writeJSON(rootPackageJsonPath, rootPkg);
+        
+        const msg = interpolate(commitMsgTemplate, {
+          package: rootPkg.name || 'root',
+          version: finalVersion,
+          bumpType: 'release'
+        });
+        await commit(rootDir, msg);
+        
+        bumped[rootPkg.name] = { version: finalVersion, bumpType: 'release', sha: null };
+        hasBumped = true;
+      }
+      
+      if (hasBumped) {
+        core.info(`[root] Prerelease finalization complete`);
+        
+        // Create release tags for finalized versions
+        if (rootPkg.version) {
+          const lastTag = await git.tags(['--sort=-v:refname']).latest;
+          await tagVersion(lastTag, rootPkg.version, true); // Force tagging for finalized releases
+        }
+        
+        // Skip normal processing and go to final steps
+      } else {
+        core.info(`[root] No prerelease versions found to finalize`);
+      }
+    }
+
+    // Step 2: For each package, determine if it needs bumping (skip if finalizing)
+    if (!shouldFinalizeVersions) {
+      for (const name of order) {
       const { dir, pkg } = graph[name];
       const packageJsonPath = path.join(dir, 'package.json');
       
@@ -509,10 +698,10 @@ async function main() {
         }
       }
       
-      // Step 2: Check for other bump-producing commits in root
+      // Step 2: Check for other bump-producing commits in root (excluding workspaces)
       const rootPackageJsonPath = path.join(rootDir, 'package.json');
       const rootLastVersionCommit = await getLastVersionChangeCommit(rootPackageJsonPath);
-      const rootCommits = await getCommitsAffecting(rootDir, rootLastVersionCommit);
+      const rootCommits = await getRootOnlyCommits(rootDir, pkgDirs, rootLastVersionCommit);
       const rootCommitBump = rootCommits.length > 0 ? getMostSignificantBump(rootCommits) : null;
       
       // Step 3: Take most significant bump type
@@ -571,29 +760,62 @@ async function main() {
       rootPkg.version = bumped[rootPkg.name].version;
       hasBumped = true;
     }
+    } // End of normal processing (if (!shouldFinalizeVersions))
 
     // Handle test failures
     if (testFailures.length > 0) {
       throw new Error(`Test failures in: ${testFailures.join(', ')}`);
     }
 
-    // Generate summary
+    // Generate comprehensive summary
+    const totalPackages = Object.keys(bumped).length;
+    const prereleasePackages = Object.values(bumped).filter(b => semver.prerelease(b.version)).length;
+    const releasePackages = totalPackages - prereleasePackages;
+    const finalizedPackages = Object.values(bumped).filter(b => b.bumpType === 'release').length;
+    
+    core.summary.addHeading('Version Bump Summary', 2);
     core.summary.addTable([
       [
         { data: 'Package', header: true },
         { data: 'Version', header: true },
         { data: 'Bump Type', header: true },
         { data: 'Previous Commit', header: true },
-        { data: 'OK', header: true }
+        { data: 'Status', header: true }
       ],
       ...Object.entries(bumped).map(([name, { version, bumpType, sha }]) => [
         { data: name },
         { data: version },
         { data: bumpType },
         { data: sha?.slice(0, 7) || 'N/A' },
-        { data: testFailures.includes(name) ? ':x:' : ':white_check_mark:' }
+        { data: testFailures.includes(name) ? ':x: Failed' : ':white_check_mark: Success' }
       ]),
     ]);
+    
+    // Add configuration summary
+    core.summary.addHeading('Configuration Used', 3);
+    core.summary.addList([
+      `Strategy: ${sameTypeBumpStrategy}`,
+      `Source branch: ${sourceBranch}`,
+      `Target branch: ${branchTarget || 'N/A'}`,
+      `Force prerelease tags: ${forcePrereleaseTags}`,
+      `Should finalize versions: ${shouldFinalizeVersions}`
+    ]);
+    
+    // Add statistics
+    core.summary.addHeading('Statistics', 3);
+    core.summary.addList([
+      `Total packages processed: ${totalPackages}`,
+      `Release versions: ${releasePackages}`,
+      `Prerelease versions: ${prereleasePackages}`,
+      `Finalized versions: ${finalizedPackages}`,
+      `Test failures: ${testFailures.length}`
+    ]);
+    
+    if (totalPackages > 0) {
+      core.info(`[summary] Processed ${totalPackages} packages: ${releasePackages} releases, ${prereleasePackages} prereleases, ${finalizedPackages} finalized`);
+    } else {
+      core.info(`[summary] No packages required version changes with strategy '${sameTypeBumpStrategy}'`);
+    }
 
     // Branch and tag handling (unchanged)
     if (targetBranch && hasBumped) {
@@ -642,24 +864,52 @@ async function main() {
       }
     } else {
       const lastTag = await git.tags(['--sort=-v:refname']).latest;
-      await tagVersion(lastTag, rootPkg.version);
+      await tagVersion(lastTag, rootPkg.version, forcePrereleaseTags);
     }
-    core.info('Version bump action completed successfully.');
+    
+    // Final validation and completion
+    if (hasBumped) {
+      core.info('✅ Version bump action completed successfully with changes');
+    } else {
+      core.info('✅ Version bump action completed successfully with no changes needed');
+    }
+    
+    // Validate final state
+    try {
+      const finalRootPkg = await readJSON(path.join(rootDir, 'package.json'));
+      if (finalRootPkg.version && !semver.valid(finalRootPkg.version)) {
+        throw new Error(`Final root package version is invalid: ${finalRootPkg.version}`);
+      }
+      core.debug(`[validation] Final root package version: ${finalRootPkg.version}`);
+    } catch (error) {
+      core.error(`[validation] Failed to validate final package state: ${error.message}`);
+      throw error;
+    }
   } catch (err) {
     console.error(err);
     core.setFailed(err.message);
     exitCode = 1;
   } finally {
     if (hasBumped) {
-      if (targetBranch) {
-        core.info(`[root] Pushing ${targetBranch}`);
-        await git.push('origin', targetBranch, ['--set-upstream', '--force']);
-        core.setOutput('branch', targetBranch);
-      } else {
-        core.info(`[root] Pushing current branch and tags`);
-        await git.push();
-        await git.pushTags();
+      try {
+        if (targetBranch) {
+          core.info(`[git] Pushing ${targetBranch} to origin`);
+          await git.push('origin', targetBranch, ['--set-upstream', '--force']);
+          core.setOutput('branch', targetBranch);
+          core.info(`[git] Successfully pushed ${targetBranch}`);
+        } else {
+          core.info(`[git] Pushing current branch and tags`);
+          await git.push();
+          await git.pushTags();
+          core.info(`[git] Successfully pushed changes and tags`);
+        }
+      } catch (error) {
+        core.error(`[git] Failed to push changes: ${error.message}`);
+        core.setFailed(`Failed to push changes: ${error.message}`);
+        exitCode = 1;
       }
+    } else {
+      core.info(`[git] No changes to push`);
     }
   }
   console.log(core.summary.stringify());
