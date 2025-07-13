@@ -2,33 +2,59 @@ name: "Package.json Version Bump Action"
 description: "Automatically bumps versions and updates dependencies in a monorepo or single-package repo using Conventional Commits."
 author: "bahulneel"
 inputs:
-  commit_message_template:
+  commit-template:
     description: "Commit message template for version bumps."
     required: false
     default: "chore(release): bump ${package} to ${version} (${bumpType})"
-  dep_commit_message_template:
+  dependency-commit-template:
     description: "Commit message template for dependency updates."
     required: false
     default: "chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)"
-  branch:
-    description: "Update versions is a seperated branch."
+  create-branch:
+    description: "Create a separate branch for version updates."
     required: false
-    default: ?0
-  branch_template:
-    description: "Template for the branch to push to."
+    default: "false"
+  branch-template:
+    description: "Template for the branch name when creating branches."
     required: false
     default: "release/${version}"
-  branch_deletion:
-    description: "Strategy for keeping the number of versioned branches. 'keep' will keep all versioned branches, 'prune' will prune all versioned branches except the latest one, 'semantic' will prune all verions branches of the same bump type."
+  branch-cleanup:
+    description: "Strategy for cleaning up versioned branches: 'keep' (keep all), 'prune' (keep latest only), or 'semantic' (keep same bump type only)."
     required: false
     default: "keep"
-  branch_target:
-    description: "The target branch to compare commits against."
+  base:
+    description: "The base branch to compare commits against."
     required: false
     default: "main"
+  strategy:
+    description: "Strategy for same-type incremental changes: 'do-nothing' (skip), 'apply-bump' (normal semver), or 'pre-release' (use prerelease versions)."
+    required: false
+    default: "do-nothing"
+  branch:
+    description: "Active branch for detecting base branch updates and prerelease finalization."
+    required: false
+    default: "develop"
+  tag-prereleases:
+    description: "Create git tags for prerelease versions."
+    required: false
+    default: "false"
 outputs:
   branch:
     description: "The branch that was created or updated."
+  packages-updated:
+    description: "Number of packages that had their versions updated."
+  releases-created:
+    description: "Number of release versions created."
+  prereleases-created:
+    description: "Number of prerelease versions created."
+  versions-finalized:
+    description: "Number of prerelease versions finalized to releases."
+  test-failures:
+    description: "Number of packages that failed tests during updates."
+  strategy-used:
+    description: "The strategy that was used for version bumping."
+  changes-made:
+    description: "Boolean indicating if any changes were made."
 runs:
   using: "node20"
   main: "dist/index.cjs"
