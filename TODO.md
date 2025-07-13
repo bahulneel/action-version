@@ -9,39 +9,47 @@
 - Missing version initialization
 - Reference version fallback issues
 
-**Fix:** Use semver package with custom suffix management (format: 1.1.0-1, 1.1.0-2, etc.)
+**Fix:** Use semver package for ALL version operations (format: 1.1.0-1, 1.1.0-2, etc.)
 ```javascript
 const semver = require('semver');
 
-// Parse version with normalized suffix
-function parseVersionWithSuffix(version) {
-  const match = version.match(/^(\d+\.\d+\.\d+)(?:-(\d+))?$/);
-  if (!match) return null;
-  return {
-    base: match[1],
-    suffix: match[2] ? parseInt(match[2]) : null
-  };
+// All version operations use semver directly
+function initializeVersion(version) {
+  return semver.coerce(version) || '0.0.0';
 }
 
-// Get base version for comparisons
-function getBaseVersion(version) {
-  const parsed = parseVersionWithSuffix(version);
-  return parsed ? parsed.base : semver.coerce(version) || '0.0.0';
+function calculateBumpType(fromVersion, toVersion) {
+  const from = semver.coerce(fromVersion) || '0.0.0';
+  const to = semver.coerce(toVersion) || '0.0.0';
+  return semver.diff(from, to); // 'major', 'minor', 'patch', 'prerelease', null
 }
 
-// Get next suffix version (finds lowest available starting at 1)
-async function getNextSuffixVersion(currentVersion, existingVersions) {
-  const parsed = parseVersionWithSuffix(currentVersion);
-  if (!parsed) return null;
+function getNextVersion(currentVersion, commitBasedBump, historicalBump) {
+  const current = semver.coerce(currentVersion) || '0.0.0';
   
-  const sameBaseVersions = existingVersions
-    .map(v => parseVersionWithSuffix(v))
-    .filter(v => v && v.base === parsed.base)
-    .map(v => v.suffix || 0);
-  
-  const maxSuffix = Math.max(0, ...sameBaseVersions);
-  return `${parsed.base}-${maxSuffix + 1}`;
+  if (commitBasedBump === historicalBump) {
+    // Same bump type - use prerelease with numeric identifier
+    if (semver.prerelease(current)) {
+      return semver.inc(current, 'prerelease'); // 1.1.0-1 → 1.1.0-2
+    } else {
+      return semver.inc(current, 'prerelease', '1'); // 1.1.0 → 1.1.0-1
+    }
+  } else {
+    // Different bump type - normal semver bump
+    return semver.inc(current, commitBasedBump);
+  }
 }
+
+function isDepCompatible(depSpec, newVersion) {
+  try {
+    return semver.satisfies(newVersion, depSpec);
+  } catch {
+    return false;
+  }
+}
+
+// Reference version fallback
+referenceVersion = semver.coerce(referenceVersion || rootPkg.version) || '0.0.0';
 ```
 
 ### 5. Handle git log -L Failure Gracefully
@@ -89,12 +97,20 @@ const rootOnlyCommits = await getRootOnlyCommits(rootDir, pkgDirs, rootLastVersi
 - No workspace changes, but bump-causing commits outside workspaces
 - Expected result: Root package bumped from 1.0.0 → 1.1.0 (workspaces unchanged)
 
+### Scenario 3: Same-Type Incremental Changes
+- Target branch: 1.0.0, Active branch: 1.1.0 (minor bump already applied)
+- New minor changes made since 1.1.0 bump
+- Expected result: Package bumped from 1.1.0 → 1.1.0-1 (prerelease for incremental minor)
+
 ## Changes Required in index.cjs
 
-- [ ] Update `getVersionAtCommit()` to return '0.0.0' for missing versions
-- [ ] Update `calculateBumpType()` to handle undefined inputs safely  
-- [ ] Add version initialization logic in main package loop
-- [ ] Fix reference version fallback to guarantee non-undefined value
+- [ ] Replace all version operations with semver package functions
+- [ ] Update `getVersionAtCommit()` to use `semver.coerce()` with '0.0.0' fallback
+- [ ] Replace `calculateBumpType()` with `semver.diff()` 
+- [ ] Replace `bumpVersion()` with `getNextVersion()` using semver prerelease logic
+- [ ] Update `isDepCompatible()` to use `semver.satisfies()`
+- [ ] Update reference version fallback to use `semver.coerce()`
+- [ ] Add version initialization using `semver.coerce()` in main package loop
 - [ ] Improve error logging in `getLastVersionChangeCommit()`
 - [ ] Create `getRootOnlyCommits()` function to exclude workspace directories
 - [ ] Update root package processing to use root-only commit detection
