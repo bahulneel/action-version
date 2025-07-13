@@ -7,6 +7,7 @@ const { execSync, spawnSync } = require('child_process');
 const simpleGit = require('simple-git');
 const { globSync } = require('glob');
 const conventionalCommitsParser = require('conventional-commits-parser');
+const semver = require('semver');
 
 const git = simpleGit();
 
@@ -30,19 +31,70 @@ async function writeJSON(file, data) {
   await fs.writeFile(file, JSON.stringify(data, null, 2) + '\n', 'utf8');
 }
 
-function bumpVersion(version, type) {
-  let [major, minor, patch] = version.split('.').map(Number);
-  if (type === 'major') {
-    major++;
-    minor = 0;
-    patch = 0;
-  } else if (type === 'minor') {
-    minor++;
-    patch = 0;
-  } else {
-    patch++;
+function initializeVersion(version) {
+  return semver.coerce(version) || '0.0.0';
+}
+
+function calculateBumpType(fromVersion, toVersion) {
+  const from = semver.coerce(fromVersion) || '0.0.0';
+  const to = semver.coerce(toVersion) || '0.0.0';
+  return semver.diff(from, to); // 'major', 'minor', 'patch', 'prerelease', null
+}
+
+function getNextVersion(currentVersion, commitBasedBump, historicalBump, strategy = 'do-nothing') {
+  const current = semver.coerce(currentVersion) || '0.0.0';
+  
+  // Validate inputs
+  if (commitBasedBump && !['major', 'minor', 'patch'].includes(commitBasedBump)) {
+    throw new Error(`Invalid commitBasedBump: ${commitBasedBump}`);
   }
-  return `${major}.${minor}.${patch}`;
+  
+  if (commitBasedBump === historicalBump) {
+    // Same bump type - use configured strategy
+    core.debug(`Same bump type detected (${commitBasedBump}), using strategy: ${strategy}`);
+    
+    switch (strategy) {
+      case 'do-nothing':
+        core.debug(`Strategy 'do-nothing': Skipping bump`);
+        return null; // Skip bump
+      
+      case 'apply-bump':
+        core.debug(`Strategy 'apply-bump': Normal semver bump ${current} → ${semver.inc(current, commitBasedBump)}`);
+        return semver.inc(current, commitBasedBump); // 1.1.0 → 1.2.0
+      
+      case 'pre-release':
+        if (semver.prerelease(current)) {
+          const nextVersion = semver.inc(current, 'prerelease');
+          core.debug(`Strategy 'pre-release': Increment prerelease ${current} → ${nextVersion}`);
+          return nextVersion; // 1.2.0-1 → 1.2.0-2
+        } else {
+          // First time: apply bump then make prerelease
+          const bumped = semver.inc(current, commitBasedBump); // 1.1.0 → 1.2.0
+          const nextVersion = semver.inc(bumped, 'prerelease', '0'); // 1.2.0 → 1.2.0-0
+          core.debug(`Strategy 'pre-release': First prerelease ${current} → ${bumped} → ${nextVersion}`);
+          return nextVersion;
+        }
+      
+      default:
+        throw new Error(`Unknown strategy: ${strategy}`);
+    }
+  } else {
+    // Different bump type - normal semver bump
+    const nextVersion = semver.inc(current, commitBasedBump);
+    core.debug(`Different bump type: ${current} → ${nextVersion} (${commitBasedBump})`);
+    return nextVersion;
+  }
+}
+
+// Finalize prerelease versions when target is updated
+function finalizeVersion(version) {
+  const current = semver.coerce(version) || '0.0.0';
+  if (semver.prerelease(current)) {
+    // Remove prerelease suffix: 1.2.0-1 → 1.2.0
+    const parsed = semver.parse(current);
+    return `${parsed.major}.${parsed.minor}.${parsed.patch}`;
+  }
+  return current;
 }
 
 function getMostSignificantBump(commits) {
@@ -209,43 +261,25 @@ async function getVersionAtCommit(packageJsonPath, commitRef) {
   try {
     const content = await git.show([`${commitRef}:${path.relative(process.cwd(), packageJsonPath)}`]);
     const pkg = JSON.parse(content);
-    return pkg.version;
+    return semver.coerce(pkg.version) || '0.0.0';
   } catch (error) {
     core.warning(`Could not get version at commit ${commitRef} for ${packageJsonPath}: ${error.message}`);
-    return null;
+    return '0.0.0';
   }
 }
 
-// Calculate bump type between two versions
-function calculateBumpType(fromVersion, toVersion) {
-  const [fromMajor, fromMinor, fromPatch] = fromVersion.split('.').map(Number);
-  const [toMajor, toMinor, toPatch] = toVersion.split('.').map(Number);
-  
-  if (toMajor > fromMajor) return 'major';
-  if (toMinor > fromMinor) return 'minor';
-  if (toPatch > fromPatch) return 'patch';
-  return null; // No bump
-}
+// Note: calculateBumpType() already replaced above in the version functions section
 
 // Check if dependency spec is compatible with new version
 function isDepCompatible(depSpec, newVersion) {
   if (!depSpec || depSpec === '*') return true;
   
-  // Handle different semver ranges
-  if (depSpec.startsWith('^')) {
-    const [major] = depSpec.substring(1).split('.').map(Number);
-    const [newMajor] = newVersion.split('.').map(Number);
-    return major === newMajor;
+  try {
+    return semver.satisfies(newVersion, depSpec);
+  } catch (error) {
+    core.debug(`Invalid semver spec '${depSpec}' for version '${newVersion}': ${error.message}`);
+    return false;
   }
-  
-  if (depSpec.startsWith('~')) {
-    const [major, minor] = depSpec.substring(1).split('.').map(Number);
-    const [newMajor, newMinor] = newVersion.split('.').map(Number);
-    return major === newMajor && minor === newMinor;
-  }
-  
-  // Exact version or other formats - assume incompatible
-  return depSpec === newVersion;
 }
 
 function deleteRemoteBranch(branch) {
@@ -278,6 +312,21 @@ async function main() {
     const templateRegex = new RegExp(branchTemplate.replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'));
     const branchDeletion = core.getInput('branch_deletion') || 'keep';
     const branchTarget = core.getInput('branch_target') || shouldCreateBranch ? 'main' : undefined;
+    
+    // New configuration inputs
+    const sameTypeBumpStrategy = core.getInput('same_type_bump_strategy') || 'do-nothing';
+    const sourceBranch = core.getInput('source_branch') || 'develop';
+    const forcePrereleaseTags = core.getInput('force_prerelease_tags') === 'true';
+    
+    // Validate strategy input
+    const validStrategies = ['do-nothing', 'apply-bump', 'pre-release'];
+    if (!validStrategies.includes(sameTypeBumpStrategy)) {
+      throw new Error(`Invalid same_type_bump_strategy: ${sameTypeBumpStrategy}. Must be one of: ${validStrategies.join(', ')}`);
+    }
+    
+    core.info(`[config] Same-type bump strategy: ${sameTypeBumpStrategy}`);
+    core.info(`[config] Source branch: ${sourceBranch}`);
+    core.info(`[config] Force prerelease tags: ${forcePrereleaseTags}`);
 
     await git.fetch(['--prune', 'origin']);
 
@@ -294,16 +343,14 @@ async function main() {
       // Get root package version at that commit
       const rootPackageJsonPath = path.join(rootDir, 'package.json');
       referenceVersion = await getVersionAtCommit(rootPackageJsonPath, referenceCommit);
-      if (!referenceVersion) {
-        referenceVersion = rootPkg.version; // fallback
-      }
+      referenceVersion = semver.coerce(referenceVersion) || '0.0.0';
     } else {
       core.info(`[root] Using latest tag as reference`);
       const tags = await git.tags(['--sort=-v:refname']);
       const latestTag = tags.latest;
       if (latestTag) {
         referenceCommit = await git.revparse([latestTag]);
-        referenceVersion = latestTag.replace(/^v/, ''); // Remove 'v' prefix if present
+        referenceVersion = semver.coerce(latestTag.replace(/^v/, '')) || '0.0.0';
       } else {
         // No tags, use first commit
         const firstCommit = await git.log(['--reverse', '--max-count=1']);
@@ -343,6 +390,12 @@ async function main() {
       const { dir, pkg } = graph[name];
       const packageJsonPath = path.join(dir, 'package.json');
       
+      // Initialize version if missing
+      if (!pkg.version) {
+        pkg.version = initializeVersion(pkg.version);
+        core.info(`[${name}] Initialized missing version to ${pkg.version}`);
+      }
+      
       core.info(`[${name}@${pkg.version}] Processing package`);
       
       // Step 2a: Detect when version was last changed
@@ -358,28 +411,41 @@ async function main() {
       
       core.info(`[${name}@${pkg.version}] Commit-based bump: ${commitBasedBump || 'none'}, Historical bump: ${historicalBump || 'none'}`);
       
-      // Step 2d: Skip if commit-based bump is less significant than historical
-      if (!commitBasedBump || (historicalBump && bumpPriority(commitBasedBump) <= bumpPriority(historicalBump))) {
-        core.info(`[${name}@${pkg.version}] Skipping - no significant changes needed`);
+      // Step 2d: Determine next version using strategy
+      if (commitBasedBump === historicalBump && commitBasedBump) {
+        core.info(`[${name}@${pkg.version}] Same bump type detected, applying strategy: ${sameTypeBumpStrategy}`);
+      }
+      
+      const nextVersion = getNextVersion(pkg.version, commitBasedBump, historicalBump, sameTypeBumpStrategy);
+      
+      if (!nextVersion) {
+        core.info(`[${name}@${pkg.version}] Skipping - strategy '${sameTypeBumpStrategy}' with no changes needed`);
         bumped[name] = { version: pkg.version, bumpType: historicalBump || 'none', sha: lastVersionCommit };
         continue;
       }
       
       // Step 2e: Bump the version
-      const newVersion = bumpVersion(pkg.version, commitBasedBump);
-      pkg.version = newVersion;
+      pkg.version = nextVersion;
       await writeJSON(packageJsonPath, pkg);
+      
+      // Determine actual bump type for logging and commits
+      const actualBumpType = semver.prerelease(nextVersion) ? 'prerelease' : commitBasedBump;
       
       const msg = interpolate(commitMsgTemplate, { 
         package: pkg.name, 
-        version: newVersion, 
-        bumpType: commitBasedBump 
+        version: pkg.version, 
+        bumpType: actualBumpType 
       });
       await commit(dir, msg);
       
-      bumped[name] = { version: newVersion, bumpType: commitBasedBump, sha: lastVersionCommit };
+      bumped[name] = { version: pkg.version, bumpType: actualBumpType, sha: lastVersionCommit };
       hasBumped = true;
-      core.info(`[${name}@${pkg.version}] Bumped to ${newVersion} (${commitBasedBump})`);
+      
+      if (semver.prerelease(nextVersion)) {
+        core.info(`[${name}@${pkg.version}] Bumped to ${pkg.version} (prerelease)`);
+      } else {
+        core.info(`[${name}@${pkg.version}] Bumped to ${pkg.version} (${commitBasedBump})`);
+      }
       
       // Step 2f: Update dependencies in other packages
       for (const siblingName of order) {
@@ -395,22 +461,22 @@ async function main() {
           
           // Step 2f-i: Skip if not a dependency
           // Step 2f-ii: Check if dependency spec is compatible
-          if (!isDepCompatible(currentDepSpec, newVersion)) {
-            core.info(`[${siblingName}] Updating ${name} dependency from ${currentDepSpec} to ^${newVersion}`);
+          if (!isDepCompatible(currentDepSpec, pkg.version)) {
+            core.info(`[${siblingName}] Updating ${name} dependency from ${currentDepSpec} to ^${pkg.version}`);
             
             // Step 2f-iii: Handle major version bumps with testing
             if (commitBasedBump === 'major') {
               const testPassed = await runTest(siblingDir, packageManager);
               if (!testPassed) {
                 core.warning(`[${siblingName}] Tests failed after major bump of ${name}, locking to previous version`);
-                siblingPkg[depKey][name] = pkg.version; // Lock to previous version
+                siblingPkg[depKey][name] = pkg.version; // Lock to current version
                 testFailures.push(siblingName);
                 siblingChanged = true;
                 continue;
               }
             }
             
-            siblingPkg[depKey][name] = `^${newVersion}`;
+            siblingPkg[depKey][name] = `^${pkg.version}`;
             siblingChanged = true;
           }
         }
@@ -421,7 +487,7 @@ async function main() {
           const msg = interpolate(depCommitMsgTemplate, {
             package: siblingPkg.name,
             depPackage: name,
-            depVersion: newVersion,
+            depVersion: pkg.version,
             version: siblingPkg.version,
             bumpType: 'patch',
           });
@@ -453,29 +519,49 @@ async function main() {
       const requiredRootBump = bumpPriority(workspaceBump) >= bumpPriority(rootCommitBump) ? workspaceBump : rootCommitBump;
       
       if (requiredRootBump) {
+        // Initialize root version if missing
+        if (!rootPkg.version) {
+          rootPkg.version = initializeVersion(rootPkg.version);
+          core.info(`[root] Initialized missing version to ${rootPkg.version}`);
+        }
+        
         // Step 4: Compare with historical version
         const rootHistoricalVersion = await getVersionAtCommit(rootPackageJsonPath, referenceCommit) || referenceVersion;
         const rootHistoricalBump = calculateBumpType(rootHistoricalVersion, rootPkg.version);
         
         core.info(`[root@${rootPkg.version}] Required bump: ${requiredRootBump}, Historical bump: ${rootHistoricalBump || 'none'}`);
         
-        // Step 5: Bump if needed
-        if (!rootHistoricalBump || bumpPriority(requiredRootBump) > bumpPriority(rootHistoricalBump)) {
-          rootPkg.version = bumpVersion(rootPkg.version, requiredRootBump);
+        // Step 5: Determine next version using strategy
+        if (requiredRootBump === rootHistoricalBump && requiredRootBump) {
+          core.info(`[root@${rootPkg.version}] Same bump type detected, applying strategy: ${sameTypeBumpStrategy}`);
+        }
+        
+        const nextRootVersion = getNextVersion(rootPkg.version, requiredRootBump, rootHistoricalBump, sameTypeBumpStrategy);
+        
+        if (nextRootVersion) {
+          rootPkg.version = nextRootVersion;
           await writeJSON(rootPackageJsonPath, rootPkg);
+          
+          // Determine actual bump type for logging and commits
+          const actualBumpType = semver.prerelease(nextRootVersion) ? 'prerelease' : requiredRootBump;
           
           const msg = interpolate(commitMsgTemplate, { 
             package: rootPkg.name || 'root', 
             version: rootPkg.version, 
-            bumpType: requiredRootBump 
+            bumpType: actualBumpType 
           });
           await commit(rootDir, msg);
           
-          bumped[rootPkg.name] = { version: rootPkg.version, bumpType: requiredRootBump, sha: rootLastVersionCommit };
+          bumped[rootPkg.name] = { version: rootPkg.version, bumpType: actualBumpType, sha: rootLastVersionCommit };
           hasBumped = true;
-          core.info(`[root@${rootPkg.version}] Bumped to ${rootPkg.version} (${requiredRootBump})`);
+          
+          if (semver.prerelease(nextRootVersion)) {
+            core.info(`[root@${rootPkg.version}] Bumped to ${rootPkg.version} (prerelease)`);
+          } else {
+            core.info(`[root@${rootPkg.version}] Bumped to ${rootPkg.version} (${requiredRootBump})`);
+          }
         } else {
-          core.info(`[root@${rootPkg.version}] Skipping - historical bump already accounts for changes`);
+          core.info(`[root@${rootPkg.version}] Skipping - strategy '${sameTypeBumpStrategy}' with no changes needed`);
         }
       } else {
         core.info(`[root@${rootPkg.version}] No changes requiring version bump`);
