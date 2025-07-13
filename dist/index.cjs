@@ -46556,6 +46556,8 @@ async function main() {
     const branchTarget = core.getInput('branch_target') || shouldCreateBranch ? 'main' : undefined;
     let lastTargetCommit;
 
+    await git.fetch(['--prune', 'origin']);
+
     if (branchTarget) {
       const branch = branchTarget.startsWith('origin/') ? branchTarget : `origin/${branchTarget}`;
       lastTargetCommit = await git.raw('rev-parse', branch);
@@ -46574,7 +46576,6 @@ async function main() {
       version: branch
     }) : undefined;
 
-    await git.fetch(['--prune', 'origin']);
     if (targetBranch) {
       core.info(`[root] Checking out ${targetBranch} from ${branch}`);
       await git.checkoutBranch(targetBranch, branch);
