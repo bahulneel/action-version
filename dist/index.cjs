@@ -46506,9 +46506,20 @@ async function runTest(dir, packageManager) {
   }
 }
 
-async function lastVersionChange(git, file) {
+async function lastVersionChange(git, file, version) {
   // Return the git tag or sha of the last commit as a reference to the version
-  const commits = await git.log(['-L', `/version/:${file}`, '-n1', '--no-patch']);
+  let commits = await git.log(['-L', `/version:\\s+"${version}"/:${file}`, '-n1', '--no-patch']);
+  if (!commits.latest) {
+    core.warning(`[${path.relative(process.cwd(), file) || '/'}] No version change found for ${version} falling back to when the version was set`);
+    commits = await git.log(['-L', `/version/:${file}`, '-n1', '--no-patch']);
+    if (!commits.latest) {
+      core.warning(`[${path.relative(process.cwd(), file) || '/'}] No version change found for ${version} falling back to when the file was created`);
+      commits = await git.log(['-n1', '--no-patch', '--', file]);
+      if (!commits.latest) {
+        throw new Error(`Could not establish a base commit for ${file}`);
+      }
+    }
+  }
   core.info(`[${path.relative(process.cwd(), file) || '/'}] Last version change: ${commits.latest.hash}`);
   return commits.latest.hash;
 }
@@ -46601,7 +46612,7 @@ async function main() {
     for (const name of order) {
       const { dir, pkg } = graph[name];
       const packageJsonPath = path.join(dir, 'package.json');
-      const sha = await lastVersionChange(git, packageJsonPath);
+      const sha = await lastVersionChange(git, packageJsonPath, pkg.version);
       const allCommits = await getCommitsAffecting(dir, lastTargetCommit || sha);
       const requiredBump = getMostSignificantBump(allCommits);
       const commits = await getCommitsAffecting(dir, sha);
@@ -46661,7 +46672,7 @@ async function main() {
       pkg.version = bumpVersion(pkg.version, 'patch');
 
       if (!bumped[pkg.name]) {
-        const sha = await lastVersionChange(git, path.join(dir, 'package.json'));
+        const sha = await lastVersionChange(git, path.join(dir, 'package.json'), pkg.version);
         bumped[pkg.name] = { version: pkg.version, bumpType: 'patch', sha };
       }
       await writeJSON(path.join(dir, 'package.json'), pkg);
@@ -46687,7 +46698,7 @@ async function main() {
             rootBump = bumped[name].bumpType;
           }
         }
-        const rootSha = await lastVersionChange(git, rootPackageJsonPath);
+        const rootSha = await lastVersionChange(git, rootPackageJsonPath, rootPkg.version);
         const commits = await getCommitsAffecting(rootDir, rootSha);
         const alreadyBumped = await hasAlreadyBumped(commits, rootBump);
         if (alreadyBumped) {
