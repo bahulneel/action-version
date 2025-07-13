@@ -464,17 +464,25 @@ class Package {
   }
 }
 
+const safeGetBooleanInput = (input, defaultValue) => {
+  try {
+    return core.getBooleanInput(input) ?? defaultValue;
+  } catch (error) {
+    return defaultValue;
+  }
+}
+
 async function parseConfiguration() {
   const commitMsgTemplate = core.getInput('commit_template') || 'chore(release): bump ${package} to ${version} (${bumpType})';
   const depCommitMsgTemplate = core.getInput('dependency_commit_template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)';
-  const shouldCreateBranch = core.getBooleanInput('create_branch');
+  const shouldCreateBranch = safeGetBooleanInput('create_branch', false);
   const branchTemplate = core.getInput('branch_template') || 'release/${version}';
   const templateRegex = new RegExp(branchTemplate.replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'));
   const branchCleanup = core.getInput('branch_cleanup') || 'keep';
   const baseBranch = core.getInput('base') || shouldCreateBranch ? 'main' : undefined;
   const strategy = core.getInput('strategy') || 'do-nothing';
   const activeBranch = core.getInput('branch') || 'develop';
-  const tagPrereleases = core.getBooleanInput('tag_prereleases');
+  const tagPrereleases = safeGetBooleanInput('tag_prereleases', false);
 
   // Validate configuration inputs
   const validStrategies = VersionBumpStrategyFactory.getAvailableStrategies();
