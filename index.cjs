@@ -235,6 +235,8 @@ async function lastNonMergeCommit(git, branch) {
 async function main() {
   let exitCode = 0;
   let targetBranch = undefined;
+  let hasBumped = false;
+
   try {
     const commitMsgTemplate = core.getInput('commit_message_template') || 'chore(release): bump ${package} to ${version} (${bumpType})';
     const depCommitMsgTemplate = core.getInput('dep_commit_message_template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)';
@@ -420,7 +422,7 @@ async function main() {
         { data: testFailures.includes(name) ? ':x:' : ':white_check_mark:' }
       ]),
     ]);
-    const hasBumped = Object.values(bumped).some(b => b.bumpType !== 'patch');
+    hasBumped = Object.values(bumped).some(b => b.bumpType !== 'patch');
 
     if (targetBranch && hasBumped) {
       const versionedBranch = interpolate(branchTemplate, {
@@ -476,14 +478,16 @@ async function main() {
     core.setFailed(err.message);
     exitCode = 1;
   } finally {
-    if (targetBranch) {
-      core.info(`[root] Pushing ${targetBranch}`);
-      await git.push('origin', targetBranch, ['--set-upstream', '--force']);
-      core.setOutput('branch', targetBranch);
-    } else {
-      core.info(`[root] Pushing current branch and tags`);
-      await git.push();
-      await git.pushTags();
+    if (hasBumped) {
+      if (targetBranch) {
+        core.info(`[root] Pushing ${targetBranch}`);
+        await git.push('origin', targetBranch, ['--set-upstream', '--force']);
+        core.setOutput('branch', targetBranch);
+      } else {
+        core.info(`[root] Pushing current branch and tags`);
+        await git.push();
+        await git.pushTags();
+      }
     }
   }
   console.log(core.summary.stringify());
