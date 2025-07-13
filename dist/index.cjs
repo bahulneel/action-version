@@ -46637,7 +46637,6 @@ async function main() {
         bumped[name] = { version: pkg.version, bumpType: requiredBump, sha };
         continue;
       }
-      core.info(`[${name}@${pkg.version}] Detected bump: ${requiredBump}`);
       // Detect if a version bump has already been made
       const commitSinceTarget = await getCommitsAffecting(dir, lastTargetRef);
       const alreadyBumped = await hasAlreadyBumped(commitSinceTarget, requiredBump);
@@ -46653,6 +46652,7 @@ async function main() {
         bumped[name] = { version: pkg.version, bumpType: lastBump, sha };
         continue;
       }
+      core.info(`[${name}@${pkg.version}] Detected bump: ${requiredBump}`);
       const newVersion = bumpVersion(pkg.version, requiredBump);
       pkg.version = newVersion;
       await writeJSON(packageJsonPath, pkg);
@@ -46754,7 +46754,9 @@ async function main() {
         { data: testFailures.includes(name) ? ':x:' : ':white_check_mark:' }
       ]),
     ]);
-    if (targetBranch) {
+    const hasBumped = Object.values(bumped).some(b => b.bumpType !== 'patch');
+
+    if (targetBranch && hasBumped) {
       const versionedBranch = interpolate(branchTemplate, {
         version: rootPkg.version
       })
