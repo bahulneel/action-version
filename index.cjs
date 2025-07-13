@@ -243,16 +243,16 @@ async function commit(dir, msg) {
   }
 }
 
-async function tagVersion(lastTag, version, forcePrereleaseTags = false) {
+async function tagVersion(lastTag, version, tagPrereleases = false) {
   const tagName = `v${version}`;
   if (!version) {
     core.warning('No version found, skipping tag');
     return;
   }
   
-  // Skip prerelease versions unless forced
-  if (semver.prerelease(version) && !forcePrereleaseTags) {
-    core.info(`Skipping prerelease tag ${tagName} (use force_prerelease_tags: true to enable)`);
+  // Skip prerelease versions unless enabled
+  if (semver.prerelease(version) && !tagPrereleases) {
+    core.info(`Skipping prerelease tag ${tagName} (use tag-prereleases: true to enable)`);
     return;
   }
   
@@ -381,47 +381,47 @@ async function main() {
   let hasBumped = false;
 
   try {
-    const commitMsgTemplate = core.getInput('commit_message_template') || 'chore(release): bump ${package} to ${version} (${bumpType})';
-    const depCommitMsgTemplate = core.getInput('dep_commit_message_template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)';
+    const commitMsgTemplate = core.getInput('commit-template') || 'chore(release): bump ${package} to ${version} (${bumpType})';
+    const depCommitMsgTemplate = core.getInput('dependency-commit-template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)';
     const rootDir = process.cwd();
     const rootPkg = await readJSON(path.join(rootDir, 'package.json'));
     const packageManager = getPackageManager();
 
     await git.addConfig('user.name', 'github-actions[bot]');
     await git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com');
-    const shouldCreateBranch = core.getInput('branch') || false;
-    const branchTemplate = core.getInput('branch_template') || 'release/${version}';
+    const shouldCreateBranch = core.getInput('create-branch') === 'true';
+    const branchTemplate = core.getInput('branch-template') || 'release/${version}';
     const templateRegex = new RegExp(branchTemplate.replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'));
-    const branchDeletion = core.getInput('branch_deletion') || 'keep';
-    const branchTarget = core.getInput('branch_target') || shouldCreateBranch ? 'main' : undefined;
+    const branchCleanup = core.getInput('branch-cleanup') || 'keep';
+    const targetBranch = core.getInput('target-branch') || shouldCreateBranch ? 'main' : undefined;
     
-    // New configuration inputs
-    const sameTypeBumpStrategy = core.getInput('same_type_bump_strategy') || 'do-nothing';
-    const sourceBranch = core.getInput('source_branch') || 'develop';
-    const forcePrereleaseTags = core.getInput('force_prerelease_tags') === 'true';
+    // Strategy and workflow inputs
+    const strategy = core.getInput('strategy') || 'do-nothing';
+    const sourceBranch = core.getInput('source-branch') || 'develop';
+    const tagPrereleases = core.getInput('tag-prereleases') === 'true';
     
     // Validate configuration inputs
     const validStrategies = ['do-nothing', 'apply-bump', 'pre-release'];
-    if (!validStrategies.includes(sameTypeBumpStrategy)) {
-      throw new Error(`Invalid same_type_bump_strategy: ${sameTypeBumpStrategy}. Must be one of: ${validStrategies.join(', ')}`);
+    if (!validStrategies.includes(strategy)) {
+      throw new Error(`Invalid strategy: ${strategy}. Must be one of: ${validStrategies.join(', ')}`);
     }
     
     if (sourceBranch && sourceBranch.trim() === '') {
-      throw new Error('source_branch cannot be empty if provided');
+      throw new Error('source-branch cannot be empty if provided');
     }
     
-    if (branchTarget && branchTarget.trim() === '') {
-      throw new Error('branch_target cannot be empty if provided');
+    if (targetBranch && targetBranch.trim() === '') {
+      throw new Error('target-branch cannot be empty if provided');
     }
     
     // Validate branch compatibility
-    if (sameTypeBumpStrategy === 'pre-release' && !branchTarget) {
-      core.warning('Using pre-release strategy without branch_target - prerelease finalization will not be available');
+    if (strategy === 'pre-release' && !targetBranch) {
+      core.warning('Using pre-release strategy without target-branch - prerelease finalization will not be available');
     }
     
-    core.info(`[config] Same-type bump strategy: ${sameTypeBumpStrategy}`);
+    core.info(`[config] Strategy: ${strategy}`);
     core.info(`[config] Source branch: ${sourceBranch}`);
-    core.info(`[config] Force prerelease tags: ${forcePrereleaseTags}`);
+    core.info(`[config] Tag prereleases: ${tagPrereleases}`);
 
     try {
       core.debug(`[git] Fetching latest changes from origin`);
@@ -438,10 +438,10 @@ async function main() {
     let shouldFinalizeVersions = false;
     
     // Check if we should finalize prerelease versions (target branch update scenario)
-    if (branchTarget && sourceBranch) {
+    if (targetBranch && sourceBranch) {
       try {
         const sourceCommit = await lastNonMergeCommit(git, `origin/${sourceBranch}`);
-        const targetCommit = await lastNonMergeCommit(git, `origin/${branchTarget}`);
+        const targetCommit = await lastNonMergeCommit(git, `origin/${targetBranch}`);
         
         if (sourceCommit === targetCommit) {
           core.info(`[root] Source and target branches are at same commit - checking for prerelease finalization`);
@@ -452,9 +452,9 @@ async function main() {
       }
     }
     
-    if (branchTarget) {
-      core.info(`[root] Using branch target: ${branchTarget}`);
-      const branch = branchTarget.startsWith('origin/') ? branchTarget : `origin/${branchTarget}`;
+    if (targetBranch) {
+      core.info(`[root] Using branch target: ${targetBranch}`);
+      const branch = targetBranch.startsWith('origin/') ? targetBranch : `origin/${targetBranch}`;
       referenceCommit = await lastNonMergeCommit(git, branch);
       referenceCommit = referenceCommit.trim();
       
@@ -602,13 +602,13 @@ async function main() {
       
       // Step 2d: Determine next version using strategy
       if (commitBasedBump === historicalBump && commitBasedBump) {
-        core.info(`[${name}@${pkg.version}] Same bump type detected, applying strategy: ${sameTypeBumpStrategy}`);
+        core.info(`[${name}@${pkg.version}] Same bump type detected, applying strategy: ${strategy}`);
       }
       
-      const nextVersion = getNextVersion(pkg.version, commitBasedBump, historicalBump, sameTypeBumpStrategy);
+      const nextVersion = getNextVersion(pkg.version, commitBasedBump, historicalBump, strategy);
       
       if (!nextVersion) {
-        core.info(`[${name}@${pkg.version}] Skipping - strategy '${sameTypeBumpStrategy}' with no changes needed`);
+        core.info(`[${name}@${pkg.version}] Skipping - strategy '${strategy}' with no changes needed`);
         bumped[name] = { version: pkg.version, bumpType: historicalBump || 'none', sha: lastVersionCommit };
         continue;
       }
@@ -722,10 +722,10 @@ async function main() {
         
         // Step 5: Determine next version using strategy
         if (requiredRootBump === rootHistoricalBump && requiredRootBump) {
-          core.info(`[root@${rootPkg.version}] Same bump type detected, applying strategy: ${sameTypeBumpStrategy}`);
+          core.info(`[root@${rootPkg.version}] Same bump type detected, applying strategy: ${strategy}`);
         }
         
-        const nextRootVersion = getNextVersion(rootPkg.version, requiredRootBump, rootHistoricalBump, sameTypeBumpStrategy);
+        const nextRootVersion = getNextVersion(rootPkg.version, requiredRootBump, rootHistoricalBump, strategy);
         
         if (nextRootVersion) {
           rootPkg.version = nextRootVersion;
@@ -750,7 +750,7 @@ async function main() {
             core.info(`[root@${rootPkg.version}] Bumped to ${rootPkg.version} (${requiredRootBump})`);
           }
         } else {
-          core.info(`[root@${rootPkg.version}] Skipping - strategy '${sameTypeBumpStrategy}' with no changes needed`);
+          core.info(`[root@${rootPkg.version}] Skipping - strategy '${strategy}' with no changes needed`);
         }
       } else {
         core.info(`[root@${rootPkg.version}] No changes requiring version bump`);
@@ -794,10 +794,10 @@ async function main() {
     // Add configuration summary
     core.summary.addHeading('Configuration Used', 3);
     core.summary.addList([
-      `Strategy: ${sameTypeBumpStrategy}`,
+      `Strategy: ${strategy}`,
       `Source branch: ${sourceBranch}`,
-      `Target branch: ${branchTarget || 'N/A'}`,
-      `Force prerelease tags: ${forcePrereleaseTags}`,
+      `Target branch: ${targetBranch || 'N/A'}`,
+      `Tag prereleases: ${tagPrereleases}`,
       `Should finalize versions: ${shouldFinalizeVersions}`
     ]);
     
@@ -814,7 +814,7 @@ async function main() {
     if (totalPackages > 0) {
       core.info(`[summary] Processed ${totalPackages} packages: ${releasePackages} releases, ${prereleasePackages} prereleases, ${finalizedPackages} finalized`);
     } else {
-      core.info(`[summary] No packages required version changes with strategy '${sameTypeBumpStrategy}'`);
+      core.info(`[summary] No packages required version changes with strategy '${strategy}'`);
     }
 
     // Branch and tag handling (unchanged)
@@ -838,8 +838,8 @@ async function main() {
       core.info(`[root] Deleting ${targetBranch}`);
       await git.deleteLocalBranch(targetBranch, true);
       targetBranch = versionedBranch;
-      core.info(`[root] Branch deletion strategy: ${branchDeletion} using ${templateRegex.source}`);
-      if (branchDeletion === 'prune' || branchDeletion === 'semantic') {
+      core.info(`[root] Branch cleanup strategy: ${branchCleanup} using ${templateRegex.source}`);
+      if (branchCleanup === 'prune' || branchCleanup === 'semantic') {
         for (const branch of branches.all) {
           if (branch.replace('origin/', '') === versionedBranch) {
             continue
@@ -849,7 +849,7 @@ async function main() {
           if (version) {
             core.info(`[root] Considering deleting ${branch}`);
             const bumpType = guessBumpType(version);
-            if (branchDeletion === 'semantic' && bumpType !== rootBump) {
+            if (branchCleanup === 'semantic' && bumpType !== rootBump) {
               continue;
             }
             core.info(`[root] Deleting ${branch}`);
@@ -864,7 +864,7 @@ async function main() {
       }
     } else {
       const lastTag = await git.tags(['--sort=-v:refname']).latest;
-      await tagVersion(lastTag, rootPkg.version, forcePrereleaseTags);
+      await tagVersion(lastTag, rootPkg.version, tagPrereleases);
     }
     
     // Final validation and completion
