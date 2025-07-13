@@ -2,48 +2,31 @@
 
 ## Critical Bugs Identified in Scenario Analysis
 
-### 1. Fix `getVersionAtCommit()` for Missing Version Fields
-**Issue:** When target branch package.json has no `version` field, function returns `null`
+### 1. Replace Version Handling with Semver Package
+**Issue:** Multiple version-related bugs due to fragile custom version parsing
+- `getVersionAtCommit()` returns `null` for missing versions
+- `calculateBumpType()` crashes on undefined values
+- Missing version initialization
+- Reference version fallback issues
+
+**Fix:** Use robust semver package for all version operations
 ```javascript
-// Current broken code:
-const pkg = JSON.parse(content);
-return pkg.version; // Returns undefined/null
+const semver = require('semver');
 
-// Fix needed:
-return pkg.version || '0.0.0'; // Default when missing
-```
-
-### 2. Fix `calculateBumpType()` for Undefined Versions  
-**Issue:** Function crashes calling `.split('.')` on undefined values
-```javascript
-// Current broken code:
-const [fromMajor, fromMinor, fromPatch] = fromVersion.split('.').map(Number);
-
-// Fix needed:
-fromVersion = fromVersion || '0.0.0';
-toVersion = toVersion || '0.0.0';
-```
-
-### 3. Initialize Missing Version in Current Package
-**Issue:** Logic assumes `pkg.version` exists, but it might not
-```javascript
-// Add before processing each package:
-if (!pkg.version) {
-  pkg.version = '0.0.0';
-  core.info(`[${name}] Initializing missing version to 0.0.0`);
-}
-```
-
-### 4. Fix Reference Version Fallback Chain
-**Issue:** Can still end up with `undefined` referenceVersion
-```javascript
-// Current problematic fallback:
-if (!referenceVersion) {
-  referenceVersion = rootPkg.version; // Also might be undefined!
+// Replace calculateBumpType()
+function calculateBumpType(fromVersion, toVersion) {
+  const from = semver.coerce(fromVersion) || '0.0.0';
+  const to = semver.coerce(toVersion) || '0.0.0';
+  return semver.diff(from, to); // 'major', 'minor', 'patch', 'prerelease', null
 }
 
-// Fix needed:
-referenceVersion = referenceVersion || rootPkg.version || '0.0.0';
+// Replace version initialization
+function initializeVersion(version) {
+  return semver.coerce(version) || '0.0.0';
+}
+
+// Replace reference version fallback  
+referenceVersion = semver.coerce(referenceVersion || rootPkg.version) || '0.0.0';
 ```
 
 ### 5. Handle git log -L Failure Gracefully
