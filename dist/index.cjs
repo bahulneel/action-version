@@ -46508,11 +46508,14 @@ async function runTest(dir, packageManager) {
 
 async function lastVersionChange(git, file, version) {
   // Return the git tag or sha of the last commit as a reference to the version
+  let strategy = 'version number';
   let commits = await git.log(['-L', `/version.*${version.replace(/\./g, '\\.')}.*"/:${file}`, '-n1', '--no-patch']);
   if (!commits.latest) {
+    strategy = 'version key';
     core.warning(`[${path.relative(process.cwd(), file) || '/'}] No version change found for ${version} falling back to when the version was set`);
     commits = await git.log(['-L', `/version/:${file}`, '-n1', '--no-patch']);
     if (!commits.latest) {
+      strategy = 'package file';
       core.warning(`[${path.relative(process.cwd(), file) || '/'}] No version change found for ${version} falling back to when the file was created`);
       commits = await git.log(['-n1', '--no-patch', '--', file]);
       if (!commits.latest) {
@@ -46520,7 +46523,7 @@ async function lastVersionChange(git, file, version) {
       }
     }
   }
-  core.info(`[${path.relative(process.cwd(), file) || '/'}] Last version change: ${commits.latest.hash}`);
+  core.info(`[${path.relative(process.cwd(), file) || '/'}] Last version change: ${commits.latest.hash} (using ${strategy})`);
   return commits.latest.hash;
 }
 
