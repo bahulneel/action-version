@@ -26,6 +26,18 @@ inputs:
     description: "The target branch to compare commits against."
     required: false
     default: "main"
+  same_type_bump_strategy:
+    description: "Strategy for handling same-type incremental changes: 'do-nothing' (skip), 'apply-bump' (normal semver), or 'pre-release' (use prerelease versions)."
+    required: false
+    default: "do-nothing"
+  source_branch:
+    description: "Source branch to compare against when detecting target branch updates for prerelease finalization."
+    required: false
+    default: "develop"
+  force_prerelease_tags:
+    description: "Force creation of git tags for prerelease versions."
+    required: false
+    default: "false"
 outputs:
   branch:
     description: "The branch that was created or updated."
