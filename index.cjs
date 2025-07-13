@@ -64,9 +64,12 @@ function bumpPriority(type) {
 function parseCommits(log, sinceRef) {
   const commits = [];
   for (const entry of log) {
+    const messageHeader = entry.message.split('\n')[0];
     if (sinceRef && entry.hash === sinceRef) {
+      core.debug(`Skipping commit ${entry.hash} because it is the same as the sinceRef: ${messageHeader}`);
       continue;
     }
+    core.debug(`Parsing commit ${entry.hash}: ${messageHeader}`);
     const parsed = conventionalCommitsParser.sync(entry.message);
     const breaking = Boolean(parsed.notes && parsed.notes.find(n => n.title === 'BREAKING CHANGE')) || /!:/g.test(parsed.header);
     commits.push({
@@ -136,7 +139,7 @@ function topoSort(graph) {
 async function getCommitsAffecting(dir, sinceRef) {
   // Get all commits affecting this dir since the last tag
   let range = sinceRef ? `${sinceRef}..HEAD` : 'HEAD';
-  const log = await git.log([range, '--pretty=medium', '--', dir]);
+  const log = await git.log([range, '--', dir]);
   const commits = parseCommits(log.all, sinceRef);
   core.info(`[${path.relative(process.cwd(), dir) || '/'}] ${commits.length} commits affecting since ${sinceRef}`);
   return commits;
@@ -193,7 +196,7 @@ async function lastVersionChange(git, file, version) {
       }
     }
   }
-  core.debug(`[${path.relative(process.cwd(), file) || '/'}] Using commit: ${commits.latest.hash}\n${commits.latest.message}`);
+  core.debug(`[${path.relative(process.cwd(), file) || '/'}] Using commit: ${commits.latest.hash}: ${commits.latest.message}`);
   core.info(`[${path.relative(process.cwd(), file) || '/'}] Last version change: ${commits.latest.hash} (using ${strategy})`);
   return commits.latest.hash;
 }
@@ -245,18 +248,22 @@ async function main() {
     const templateRegex = new RegExp(branchTemplate.replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'));
     const branchDeletion = core.getInput('branch_deletion') || 'keep';
     const branchTarget = core.getInput('branch_target') || shouldCreateBranch ? 'main' : undefined;
-    let lastTargetCommit;
+    let lastTargetRef;
 
     await git.fetch(['--prune', 'origin']);
 
     if (branchTarget) {
+      core.info(`[root] Checking branch target for the last commit: ${branchTarget}`);
       const branch = branchTarget.startsWith('origin/') ? branchTarget : `origin/${branchTarget}`;
-      lastTargetCommit = await lastNonMergeCommit(git, branch);
-      lastTargetCommit = lastTargetCommit.trim();
-      core.info(`[root] Last target commit: ${branch}@${lastTargetCommit}`);
+      lastTargetRef = await lastNonMergeCommit(git, branch);
+      lastTargetRef = lastTargetRef.trim();
     } else {
-      lastTargetCommit = await git.tags(['--sort=-v:refname']).latest;
+      core.info(`[root] No branch target, using last tag`);
+      const tags = await git.tags(['--sort=-v:refname']);
+      core.debug(`[root] Tags: ${JSON.stringify(tags, null, 2)}`);
+      lastTargetRef = tags.latest;
     }
+    core.info(`[root] Last ref of target branch: ${lastTargetRef}`);
 
     const branch =
       process.env.GITHUB_HEAD_REF ||
@@ -292,7 +299,7 @@ async function main() {
       const requiredBump = getMostSignificantBump(commits);
       core.info(`[${name}] Required bump: ${requiredBump}`);
       // Detect if a version bump has already been made
-      const commitSinceTarget = await getCommitsAffecting(dir, lastTargetCommit);
+      const commitSinceTarget = await getCommitsAffecting(dir, lastTargetRef);
       const alreadyBumped = await hasAlreadyBumped(commitSinceTarget, requiredBump);
       const lastBump = await lastBumpType(commits);
       // If the required bump is less than or equal to the last bump, skip
@@ -365,7 +372,7 @@ async function main() {
           core.info(`[root] No changes found, skipping root package`);
           return;
         }
-        const allCommits = await getCommitsAffecting(rootDir, lastTargetCommit);
+        const allCommits = await getCommitsAffecting(rootDir, lastTargetRef);
         const alreadyBumped = await hasAlreadyBumped(allCommits, rootBump);
         if (alreadyBumped) {
           core.info(`[root] Skipping root package because it has already been bumped to ${rootBump}`);
