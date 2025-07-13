@@ -13,7 +13,7 @@ inputs:
   create-branch:
     description: "Create a separate branch for version updates."
     required: false
-    default: "false"
+    default: ?0
   branch-template:
     description: "Template for the branch name when creating branches."
     required: false
@@ -37,7 +37,7 @@ inputs:
   tag-prereleases:
     description: "Create git tags for prerelease versions."
     required: false
-    default: "false"
+    default: ?0
 outputs:
   branch:
     description: "The branch that was created or updated."
