@@ -46729,11 +46729,13 @@ async function main() {
         await commit(rootDir, msg);
         core.info(`[root@${rootPkg.version}] Bumped to ${rootPkg.version} (${rootBump})`);
         bumped[rootPkg.name] = { ...bumped[rootPkg.name], version: rootPkg.version, bumpType: rootBump };
+        hasBumped = true;
       }
       await bumpRoot()
     } else if (rootPkg.name && rootPkg.name in bumped) {
       core.info(`[root] Root was bumped in a previous step`);
       rootPkg.version = bumped[rootPkg.name].version;
+      hasBumped = true;
     }
     // 8. Handle test failures
     if (testFailures.length > 0) {
@@ -46756,7 +46758,6 @@ async function main() {
         { data: testFailures.includes(name) ? ':x:' : ':white_check_mark:' }
       ]),
     ]);
-    hasBumped = Object.values(bumped).length;
 
     if (targetBranch && hasBumped) {
       const versionedBranch = interpolate(branchTemplate, {
