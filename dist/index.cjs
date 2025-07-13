@@ -46535,9 +46535,9 @@ async function lastVersionChange(git, file, version) {
 }
 
 async function lastBumpType(commits) {
-  const lastBumpType = commits.find(c => /chore\(release\): bump/.test(c.header))?.header.match(/\((major|minor|patch)\)/)?.[1];
-  if (!lastBumpType) return null;
-  return lastBumpType;
+  const lastBump = commits.find(c => /chore\(release\): bump/.test(c.header))?.header.match(/\((major|minor|patch)\)/)?.[1];
+  if (!lastBump) return null;
+  return lastBump;
 }
 
 async function hasAlreadyBumped(commits, requiredBump) {
@@ -46630,16 +46630,16 @@ async function main() {
       // Detect if a version bump has already been made
       const commitSinceTarget = await getCommitsAffecting(dir, lastTargetCommit);
       const alreadyBumped = await hasAlreadyBumped(commitSinceTarget, requiredBump);
-      const lastBumpType = await lastBumpType(commits);
+      const lastBump = await lastBumpType(commits);
       // If the required bump is less than or equal to the last bump, skip
       if (alreadyBumped) {
         core.info(`[${name}] Skipping ${pkg.name} because it was already bumped to ${requiredBump}`);
-        bumped[name] = { version: pkg.version, bumpType: lastBumpType, sha };
+        bumped[name] = { version: pkg.version, bumpType: lastBump, sha };
         continue; // Skip bumping this package
       }
       if (requiredBump === 'patch' && commits.length === 0) {
         core.info(`[${name}] Skipping ${pkg.name} because it has no changes`);
-        bumped[name] = { version: pkg.version, bumpType: lastBumpType, sha };
+        bumped[name] = { version: pkg.version, bumpType: lastBump, sha };
         continue;
       }
       const newVersion = bumpVersion(pkg.version, requiredBump);
