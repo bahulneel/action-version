@@ -49043,6 +49043,352 @@ const git = simpleGit();
 
 const depKeys = ['dependencies', 'devDependencies', 'peerDependencies'];
 
+// Strategy Pattern: Version Bump Strategies
+class VersionBumpStrategy {
+  constructor(name) {
+    this.name = name;
+  }
+  
+  execute(currentVersion, commitBasedBump, historicalBump) {
+    throw new Error('Strategy must implement execute method');
+  }
+}
+
+class DoNothingStrategy extends VersionBumpStrategy {
+  constructor() {
+    super('do-nothing');
+  }
+  
+  execute(currentVersion, commitBasedBump, historicalBump) {
+    core.debug(`Strategy 'do-nothing': Skipping bump`);
+    return currentVersion; // No change
+  }
+}
+
+class ApplyBumpStrategy extends VersionBumpStrategy {
+  constructor() {
+    super('apply-bump');
+  }
+  
+  execute(currentVersion, commitBasedBump, historicalBump) {
+    const current = semver.coerce(currentVersion) || '0.0.0';
+    const nextVersion = semver.inc(current, commitBasedBump);
+    core.debug(`Strategy 'apply-bump': Normal semver bump ${current} → ${nextVersion}`);
+    return nextVersion; // 1.1.0 → 1.2.0
+  }
+}
+
+class PreReleaseStrategy extends VersionBumpStrategy {
+  constructor() {
+    super('pre-release');
+  }
+  
+  execute(currentVersion, commitBasedBump, historicalBump) {
+    const current = semver.coerce(currentVersion) || '0.0.0';
+    
+    if (semver.prerelease(current)) {
+      const nextVersion = semver.inc(current, 'prerelease');
+      core.debug(`Strategy 'pre-release': Increment prerelease ${current} → ${nextVersion}`);
+      return nextVersion; // 1.2.0-1 → 1.2.0-2
+    } else {
+      // First time: apply bump then make prerelease
+      const bumped = semver.inc(current, commitBasedBump); // 1.1.0 → 1.2.0
+      const nextVersion = semver.inc(bumped, 'prerelease', '0'); // 1.2.0 → 1.2.0-0
+      core.debug(`Strategy 'pre-release': First prerelease ${current} → ${bumped} → ${nextVersion}`);
+      return nextVersion;
+    }
+  }
+}
+
+class VersionBumpStrategyFactory {
+  static strategies = {
+    'do-nothing': new DoNothingStrategy(),
+    'apply-bump': new ApplyBumpStrategy(),
+    'pre-release': new PreReleaseStrategy()
+  };
+  
+  static getStrategy(strategyName) {
+    const strategy = this.strategies[strategyName];
+    if (!strategy) {
+      throw new Error(`Unknown version bump strategy: ${strategyName}`);
+    }
+    return strategy;
+  }
+  
+  static getAvailableStrategies() {
+    return Object.keys(this.strategies);
+  }
+}
+
+// Strategy Pattern: Branch Cleanup Strategies
+class BranchCleanupStrategy {
+  constructor(name) {
+    this.name = name;
+  }
+  
+  async execute(branches, versionedBranch, templateRegex, rootBump) {
+    throw new Error('Strategy must implement execute method');
+  }
+}
+
+class KeepAllBranchesStrategy extends BranchCleanupStrategy {
+  constructor() {
+    super('keep');
+  }
+  
+  async execute(branches, versionedBranch, templateRegex, rootBump) {
+    core.info(`[root] Branch cleanup strategy: ${this.name} - keeping all branches`);
+    // Do nothing - keep all branches
+  }
+}
+
+class PruneOldBranchesStrategy extends BranchCleanupStrategy {
+  constructor() {
+    super('prune');
+  }
+  
+  async execute(branches, versionedBranch, templateRegex, rootBump) {
+    core.info(`[root] Branch cleanup strategy: ${this.name} - removing old branches`);
+    
+    for (const branch of branches.all) {
+      if (branch.replace('origin/', '') === versionedBranch) {
+        continue; // Skip current branch
+      }
+      
+      const match = branch.match(templateRegex);
+      const { version } = match?.groups || {};
+      if (version) {
+        core.info(`[root] Deleting old branch ${branch}`);
+        await this._deleteBranch(branch);
+      }
+    }
+  }
+  
+  async _deleteBranch(branch) {
+    try {
+      await git.deleteLocalBranch(branch, true);
+    } catch { }
+    try {
+      deleteRemoteBranch(branch.replace('origin/', ''));
+    } catch { }
+  }
+}
+
+class SemanticBranchesStrategy extends BranchCleanupStrategy {
+  constructor() {
+    super('semantic');
+  }
+  
+  async execute(branches, versionedBranch, templateRegex, rootBump) {
+    core.info(`[root] Branch cleanup strategy: ${this.name} - keeping same bump type only`);
+    
+    for (const branch of branches.all) {
+      if (branch.replace('origin/', '') === versionedBranch) {
+        continue; // Skip current branch
+      }
+      
+      const match = branch.match(templateRegex);
+      const { version } = match?.groups || {};
+      if (version) {
+        const bumpType = guessBumpType(version);
+        if (bumpType !== rootBump) {
+          continue; // Keep different bump types
+        }
+        
+        core.info(`[root] Deleting same-type branch ${branch} (${bumpType})`);
+        await this._deleteBranch(branch);
+      }
+    }
+  }
+  
+  async _deleteBranch(branch) {
+    try {
+      await git.deleteLocalBranch(branch, true);
+    } catch { }
+    try {
+      deleteRemoteBranch(branch.replace('origin/', ''));
+    } catch { }
+  }
+}
+
+class BranchCleanupStrategyFactory {
+  static strategies = {
+    'keep': new KeepAllBranchesStrategy(),
+    'prune': new PruneOldBranchesStrategy(),
+    'semantic': new SemanticBranchesStrategy()
+  };
+  
+  static getStrategy(strategyName) {
+    const strategy = this.strategies[strategyName];
+    if (!strategy) {
+      throw new Error(`Unknown branch cleanup strategy: ${strategyName}`);
+    }
+    return strategy;
+  }
+  
+  static getAvailableStrategies() {
+    return Object.keys(this.strategies);
+  }
+}
+
+// Strategy Pattern: Reference Point Determination Strategies
+class ReferencePointStrategy {
+  constructor(name) {
+    this.name = name;
+  }
+  
+  async execute(baseBranch, activeBranch) {
+    throw new Error('Strategy must implement execute method');
+  }
+}
+
+class TagBasedReferenceStrategy extends ReferencePointStrategy {
+  constructor() {
+    super('tag-based');
+  }
+  
+  async execute(baseBranch, activeBranch) {
+    core.info(`[root] Using latest tag as reference`);
+    const tags = await git.tags(['--sort=-v:refname']);
+    const latestTag = tags.latest;
+    
+    if (latestTag) {
+      const referenceCommit = await git.revparse([latestTag]);
+      const referenceVersion = semver.coerce(latestTag.replace(/^v/, '')) || '0.0.0';
+      return { referenceCommit, referenceVersion, shouldFinalizeVersions: false };
+    } else {
+      // No tags, use first commit
+      const firstCommit = await git.log(['--reverse', '--max-count=1']);
+      const referenceCommit = firstCommit.latest.hash;
+      const referenceVersion = '0.0.0';
+      return { referenceCommit, referenceVersion, shouldFinalizeVersions: false };
+    }
+  }
+}
+
+class BranchBasedReferenceStrategy extends ReferencePointStrategy {
+  constructor() {
+    super('branch-based');
+  }
+  
+  async execute(baseBranch, activeBranch) {
+    core.info(`[root] Using branch base: ${baseBranch}`);
+    const branch = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`;
+    let referenceCommit = await lastNonMergeCommit(git, branch);
+    referenceCommit = referenceCommit.trim();
+    
+    // Get root package version at that commit
+    const rootPackageJsonPath = path.join(process.cwd(), 'package.json');
+    let referenceVersion = await getVersionAtCommit(rootPackageJsonPath, referenceCommit);
+    referenceVersion = semver.coerce(referenceVersion) || '0.0.0';
+    
+    // Check if we should finalize prerelease versions (base branch update scenario)
+    let shouldFinalizeVersions = false;
+    if (baseBranch && activeBranch) {
+      try {
+        const activeCommit = await lastNonMergeCommit(git, `origin/${activeBranch}`);
+        const baseCommit = await lastNonMergeCommit(git, `origin/${baseBranch}`);
+        
+        if (activeCommit === baseCommit) {
+          core.info(`[root] Active and base branches are at same commit - checking for prerelease finalization`);
+          shouldFinalizeVersions = true;
+        }
+      } catch (error) {
+        core.debug(`Could not compare active/base branches: ${error.message}`);
+      }
+    }
+    
+    return { referenceCommit, referenceVersion, shouldFinalizeVersions };
+  }
+}
+
+class ReferencePointStrategyFactory {
+  static getStrategy(baseBranch) {
+    if (baseBranch) {
+      return new BranchBasedReferenceStrategy();
+    } else {
+      return new TagBasedReferenceStrategy();
+    }
+  }
+}
+
+// Strategy Pattern: Package Manager Detection Strategies
+class PackageManagerStrategy {
+  constructor(name) {
+    this.name = name;
+  }
+  
+  detect() {
+    throw new Error('Strategy must implement detect method');
+  }
+}
+
+class YarnDetectionStrategy extends PackageManagerStrategy {
+  constructor() {
+    super('yarn');
+  }
+  
+  detect() {
+    try {
+      const fs = __nccwpck_require__(1943);
+      fs.stat(path.join(process.cwd(), 'yarn.lock'));
+      return 'yarn';
+    } catch {
+      return null;
+    }
+  }
+}
+
+class NpmDetectionStrategy extends PackageManagerStrategy {
+  constructor() {
+    super('npm');
+  }
+  
+  detect() {
+    try {
+      const fs = __nccwpck_require__(1943);
+      fs.stat(path.join(process.cwd(), 'package-lock.json'));
+      return 'npm';
+    } catch {
+      return null;
+    }
+  }
+}
+
+class PnpmDetectionStrategy extends PackageManagerStrategy {
+  constructor() {
+    super('pnpm');
+  }
+  
+  detect() {
+    try {
+      const fs = __nccwpck_require__(1943);
+      fs.stat(path.join(process.cwd(), 'pnpm-lock.yaml'));
+      return 'pnpm';
+    } catch {
+      return null;
+    }
+  }
+}
+
+class PackageManagerDetectionFactory {
+  static strategies = [
+    new YarnDetectionStrategy(),
+    new PnpmDetectionStrategy(),
+    new NpmDetectionStrategy() // NPM as fallback
+  ];
+  
+  static detectPackageManager() {
+    for (const strategy of this.strategies) {
+      const result = strategy.detect();
+      if (result) {
+        return result;
+      }
+    }
+    return 'npm'; // Default fallback
+  }
+}
+
 class Package {
   constructor(name, dir, pkg, packageJsonPath) {
     this.name = name;
@@ -49241,9 +49587,14 @@ async function parseConfiguration() {
   const tagPrereleases = core.getBooleanInput('tag-prereleases');
   
   // Validate configuration inputs
-  const validStrategies = ['do-nothing', 'apply-bump', 'pre-release'];
+  const validStrategies = VersionBumpStrategyFactory.getAvailableStrategies();
   if (!validStrategies.includes(strategy)) {
     throw new Error(`Invalid strategy: ${strategy}. Must be one of: ${validStrategies.join(', ')}`);
+  }
+  
+  const validCleanupStrategies = BranchCleanupStrategyFactory.getAvailableStrategies();
+  if (!validCleanupStrategies.includes(branchCleanup)) {
+    throw new Error(`Invalid branch cleanup strategy: ${branchCleanup}. Must be one of: ${validCleanupStrategies.join(', ')}`);
   }
   
   if (activeBranch && activeBranch.trim() === '') {
@@ -49311,53 +49662,12 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
 }
 
 async function determineReferencePoint(baseBranch, activeBranch) {
-  let referenceCommit;
-  let referenceVersion;
-  let shouldFinalizeVersions = false;
+  const strategy = ReferencePointStrategyFactory.getStrategy(baseBranch);
+  const result = await strategy.execute(baseBranch, activeBranch);
   
-  // Check if we should finalize prerelease versions (base branch update scenario)
-  if (baseBranch && activeBranch) {
-    try {
-      const activeCommit = await lastNonMergeCommit(git, `origin/${activeBranch}`);
-      const baseCommit = await lastNonMergeCommit(git, `origin/${baseBranch}`);
-      
-      if (activeCommit === baseCommit) {
-        core.info(`[root] Active and base branches are at same commit - checking for prerelease finalization`);
-        shouldFinalizeVersions = true;
-      }
-    } catch (error) {
-      core.debug(`Could not compare active/base branches: ${error.message}`);
-    }
-  }
+  core.info(`[root] Reference: ${result.referenceCommit} (version: ${result.referenceVersion})`);
   
-  if (baseBranch) {
-    core.info(`[root] Using branch base: ${baseBranch}`);
-    const branch = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`;
-    referenceCommit = await lastNonMergeCommit(git, branch);
-    referenceCommit = referenceCommit.trim();
-    
-    // Get root package version at that commit
-    const rootPackageJsonPath = path.join(process.cwd(), 'package.json');
-    referenceVersion = await getVersionAtCommit(rootPackageJsonPath, referenceCommit);
-    referenceVersion = semver.coerce(referenceVersion) || '0.0.0';
-  } else {
-    core.info(`[root] Using latest tag as reference`);
-    const tags = await git.tags(['--sort=-v:refname']);
-    const latestTag = tags.latest;
-    if (latestTag) {
-      referenceCommit = await git.revparse([latestTag]);
-      referenceVersion = semver.coerce(latestTag.replace(/^v/, '')) || '0.0.0';
-    } else {
-      // No tags, use first commit
-      const firstCommit = await git.log(['--reverse', '--max-count=1']);
-      referenceCommit = firstCommit.latest.hash;
-      referenceVersion = '0.0.0';
-    }
-  }
-  
-  core.info(`[root] Reference: ${referenceCommit} (version: ${referenceVersion})`);
-  
-  return { referenceCommit, referenceVersion, shouldFinalizeVersions };
+  return result;
 }
 
 async function processWorkspacePackages(packages, referenceCommit, referenceVersion, strategy, commitMsgTemplate, depCommitMsgTemplate) {
@@ -49631,31 +49941,9 @@ async function handleBranchOperations(newBranch, hasBumped, rootPkg, branchTempl
     await git.deleteLocalBranch(newBranch, true);
     outputBranch = versionedBranch;
     
-    core.info(`[root] Branch cleanup strategy: ${branchCleanup} using ${templateRegex.source}`);
-    if (branchCleanup === 'prune' || branchCleanup === 'semantic') {
-      const rootBump = guessBumpType(rootPkg.version);
-      for (const branch of branches.all) {
-        if (branch.replace('origin/', '') === versionedBranch) {
-          continue
-        }
-        const match = branch.match(templateRegex);
-        const { version } = match?.groups || {};
-        if (version) {
-          core.info(`[root] Considering deleting ${branch}`);
-          const bumpType = guessBumpType(version);
-          if (branchCleanup === 'semantic' && bumpType !== rootBump) {
-            continue;
-          }
-          core.info(`[root] Deleting ${branch}`);
-          try {
-            await git.deleteLocalBranch(branch, true);
-          } catch { }
-          try {
-            deleteRemoteBranch(branch.replace('origin/', ''));
-          } catch { }
-        }
-      }
-    }
+    const cleanupStrategy = BranchCleanupStrategyFactory.getStrategy(branchCleanup);
+    const rootBump = guessBumpType(rootPkg.version);
+    await cleanupStrategy.execute(branches, versionedBranch, templateRegex, rootBump);
   } else {
     const lastTag = await git.tags(['--sort=-v:refname']).latest;
     await tagVersion(lastTag, rootPkg.version, tagPrereleases);
@@ -49669,9 +49957,7 @@ function interpolate(template, vars) {
 }
 
 function getPackageManager() {
-  // Prefer yarn if yarn.lock exists, else npm
-  if (fs.stat(path.join(process.cwd(), 'yarn.lock')).catch(() => false)) return 'yarn';
-  return 'npm';
+  return PackageManagerDetectionFactory.detectPackageManager();
 }
 
 async function readJSON(file) {
@@ -49692,7 +49978,7 @@ function calculateBumpType(fromVersion, toVersion) {
   return semver.diff(from, to); // 'major', 'minor', 'patch', 'prerelease', null
 }
 
-function getNextVersion(currentVersion, commitBasedBump, historicalBump, strategy = 'do-nothing') {
+function getNextVersion(currentVersion, commitBasedBump, historicalBump, strategyName = 'do-nothing') {
   const current = semver.coerce(currentVersion) || '0.0.0';
   
   // Validate inputs
@@ -49702,35 +49988,19 @@ function getNextVersion(currentVersion, commitBasedBump, historicalBump, strateg
   
   if (commitBasedBump === historicalBump) {
     // Same bump type - use configured strategy
-    core.debug(`Same bump type detected (${commitBasedBump}), using strategy: ${strategy}`);
+    core.debug(`Same bump type detected (${commitBasedBump}), using strategy: ${strategyName}`);
     
-    switch (strategy) {
-      case 'do-nothing':
-        core.debug(`Strategy 'do-nothing': Skipping bump`);
-        return null; // Skip bump
-      
-      case 'apply-bump':
-        core.debug(`Strategy 'apply-bump': Normal semver bump ${current} → ${semver.inc(current, commitBasedBump)}`);
-        return semver.inc(current, commitBasedBump); // 1.1.0 → 1.2.0
-      
-      case 'pre-release':
-        if (semver.prerelease(current)) {
-          const nextVersion = semver.inc(current, 'prerelease');
-          core.debug(`Strategy 'pre-release': Increment prerelease ${current} → ${nextVersion}`);
-          return nextVersion; // 1.2.0-1 → 1.2.0-2
-        } else {
-          // First time: apply bump then make prerelease
-          const bumped = semver.inc(current, commitBasedBump); // 1.1.0 → 1.2.0
-          const nextVersion = semver.inc(bumped, 'prerelease', '0'); // 1.2.0 → 1.2.0-0
-          core.debug(`Strategy 'pre-release': First prerelease ${current} → ${bumped} → ${nextVersion}`);
-          return nextVersion;
-        }
-      
-      default:
-        throw new Error(`Unknown strategy: ${strategy}`);
+    const strategy = VersionBumpStrategyFactory.getStrategy(strategyName);
+    const nextVersion = strategy.execute(currentVersion, commitBasedBump, historicalBump);
+    
+    // Handle do-nothing strategy return value
+    if (nextVersion === currentVersion && strategyName === 'do-nothing') {
+      return null; // Skip bump
     }
+    
+    return nextVersion;
   } else {
-    // Different bump type - normal semver bump
+    // Different bump type - normal semver bump (always apply)
     const nextVersion = semver.inc(current, commitBasedBump);
     core.debug(`Different bump type: ${current} → ${nextVersion} (${commitBasedBump})`);
     return nextVersion;
