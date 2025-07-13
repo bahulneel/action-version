@@ -46397,13 +46397,11 @@ function bumpPriority(type) {
 
 function parseCommits(log, sinceRef) {
   const commits = [];
-  for (const entry of log.split(/^commit /gm).slice(1)) {
-    if (sinceRef && entry.includes(sinceRef)) {
+  for (const entry of log) {
+    if (sinceRef && entry.hash === sinceRef) {
       continue;
     }
-    const lines = entry.split('\n');
-    const message = lines.slice(4).join('\n').trim();
-    const parsed = conventionalCommitsParser.sync(message);
+    const parsed = conventionalCommitsParser.sync(entry.message);
     const breaking = Boolean(parsed.notes && parsed.notes.find(n => n.title === 'BREAKING CHANGE')) || /!:/g.test(parsed.header);
     commits.push({
       type: parsed.type,
@@ -46472,7 +46470,7 @@ function topoSort(graph) {
 async function getCommitsAffecting(dir, sinceRef) {
   // Get all commits affecting this dir since the last tag
   let range = sinceRef ? `${sinceRef}..HEAD` : 'HEAD';
-  const log = execSync(`git log ${range} --pretty=medium -- ${dir}`, { encoding: 'utf8' });
+  const log = await git.log([range, '--pretty=medium', '--', dir]);
   const commits = parseCommits(log, sinceRef);
   core.info(`[${path.relative(process.cwd(), dir) || '/'}] ${commits.length} commits affecting since ${sinceRef}`);
   return commits;
