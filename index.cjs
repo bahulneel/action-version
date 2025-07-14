@@ -638,7 +638,7 @@ async function finalizePackageVersions(packages, rootPkg, commitMsgTemplate, git
     await gitStrategy.commitVersionChange(process.cwd(), rootPkg.name || 'root', finalVersion, 'release', commitMsgTemplate);
 
     bumped[rootPkg.name] = { version: finalVersion, bumpType: 'release', sha: null };
-    hasBumped = true;
+    hasBumped = hasBumped || true;
   }
 
   if (hasBumped) {
@@ -1240,14 +1240,14 @@ async function main() {
     if (shouldFinalizeVersions) {
       const result = await finalizePackageVersions(packages, rootPkg, commitMsgTemplate, gitStrategy);
       bumped = result.bumped;
-      hasBumped = result.hasBumped;
+      hasBumped = hasBumped || result.hasBumped;
     } else {
       // Step 6a: Process workspace packages
       const workspaceResult = await processWorkspacePackages(
         packages, referenceCommit, referenceVersion, strategy, commitMsgTemplate, depCommitMsgTemplate, gitStrategy, packageManager);
       bumped = workspaceResult.bumped;
       testFailures = workspaceResult.testFailures;
-      hasBumped = Object.keys(bumped).length > 0;
+      hasBumped = hasBumped || Object.keys(bumped).length > 0;
 
       // Step 6b: Process root package
       const rootResult = await processRootPackage(rootPkg, bumped, referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy);
