@@ -1,15 +1,16 @@
 {
   "name": "action-version",
+  "type": "module",
   "version": "0.28.19",
   "description": "GitHub Action for automated version bumping and dependency management in monorepos using Conventional Commits.",
-  "main": "dist/index.cjs",
-  "type": "module",
   "license": "MIT",
+  "main": "dist/index.cjs",
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
     "build": "ncc build index.cjs -s -o dist",
+    "lint": "eslint .",
     "self": "node dist/index.cjs"
   },
   "dependencies": {
@@ -21,6 +22,8 @@
     "source-map-support": "^0.5.21"
   },
   "devDependencies": {
-    "@vercel/ncc": "^0.38.0"
+    "@antfu/eslint-config": "^4.16.2",
+    "@vercel/ncc": "^0.38.0",
+    "eslint": "^9.31.0"
   }
 }

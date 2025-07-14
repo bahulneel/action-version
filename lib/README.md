@@ -9,7 +9,7 @@ lib/
 ├── package-managers/          # Package manager strategies
 │   ├── base.cjs              # Base PackageManagerStrategy class
 │   ├── yarn.cjs              # Yarn package manager strategy
-│   ├── npm.cjs               # NPM package manager strategy  
+│   ├── npm.cjs               # NPM package manager strategy
 │   ├── pnpm.cjs              # PNPM package manager strategy
 │   ├── factory.cjs           # PackageManagerFactory
 │   └── index.cjs             # Exports all package manager strategies
@@ -29,11 +29,11 @@ lib/
 Package manager strategies encapsulate the behavior for different package managers:
 
 ```javascript
-const { PackageManagerFactory } = require('./lib/package-managers/factory.cjs');
+const { PackageManagerFactory } = require('./lib/package-managers/factory.cjs')
 
-const packageManager = PackageManagerFactory.getPackageManager();
-await packageManager.install('./some-package');
-await packageManager.test('./some-package');
+const packageManager = PackageManagerFactory.getPackageManager()
+await packageManager.install('./some-package')
+await packageManager.test('./some-package')
 ```
 
 ### Git Operation Strategies
@@ -41,11 +41,11 @@ await packageManager.test('./some-package');
 Git operation strategies encapsulate git workflow behaviors:
 
 ```javascript
-const { GitOperationStrategyFactory } = require('./lib/git-operations/factory.cjs');
+const { GitOperationStrategyFactory } = require('./lib/git-operations/factory.cjs')
 
-const gitStrategy = GitOperationStrategyFactory.getStrategy('conventional');
-await gitStrategy.commitVersionChange('./package', 'my-package', '1.0.0', 'patch', template);
-await gitStrategy.tagVersion('1.0.0', false, true);
+const gitStrategy = GitOperationStrategyFactory.getStrategy('conventional')
+await gitStrategy.commitVersionChange('./package', 'my-package', '1.0.0', 'patch', template)
+await gitStrategy.tagVersion('1.0.0', false, true)
 ```
 
 ## Design Principles

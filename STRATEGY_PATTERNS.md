@@ -29,20 +29,20 @@ switch (strategy) {
 ```javascript
 class VersionBumpStrategy {
   execute(currentVersion, commitBasedBump, historicalBump) {
-    throw new Error('Strategy must implement execute method');
+    throw new Error('Strategy must implement execute method')
   }
 }
 
 class DoNothingStrategy extends VersionBumpStrategy {
   execute(currentVersion, commitBasedBump, historicalBump) {
-    return currentVersion; // No change
+    return currentVersion // No change
   }
 }
 
 class ApplyBumpStrategy extends VersionBumpStrategy {
   execute(currentVersion, commitBasedBump, historicalBump) {
-    const current = semver.coerce(currentVersion) || '0.0.0';
-    return semver.inc(current, commitBasedBump);
+    const current = semver.coerce(currentVersion) || '0.0.0'
+    return semver.inc(current, commitBasedBump)
   }
 }
 
@@ -73,7 +73,7 @@ if (branchCleanup === 'prune' || branchCleanup === 'semantic') {
   for (const branch of branches.all) {
     // Complex cleanup logic with nested conditions
     if (branchCleanup === 'semantic' && bumpType !== rootBump) {
-      continue;
+      continue
     }
     // Delete branch logic...
   }
@@ -84,7 +84,7 @@ if (branchCleanup === 'prune' || branchCleanup === 'semantic') {
 ```javascript
 class BranchCleanupStrategy {
   async execute(branches, versionedBranch, templateRegex, rootBump) {
-    throw new Error('Strategy must implement execute method');
+    throw new Error('Strategy must implement execute method')
   }
 }
 
@@ -109,7 +109,7 @@ class SemanticBranchesStrategy extends BranchCleanupStrategy {
 
 **Available Strategies**:
 - `keep`: Keep all version branches
-- `prune`: Remove all old version branches  
+- `prune`: Remove all old version branches
 - `semantic`: Keep only branches with different bump types
 
 **Benefits**:
@@ -125,12 +125,13 @@ class SemanticBranchesStrategy extends BranchCleanupStrategy {
 ```javascript
 if (baseBranch) {
   // Branch-based reference logic
-  const branch = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`;
-  referenceCommit = await lastNonMergeCommit(git, branch);
+  const branch = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`
+  referenceCommit = await lastNonMergeCommit(git, branch)
   // More complex logic...
-} else {
-  // Tag-based reference logic  
-  const tags = await git.tags(['--sort=-v:refname']);
+}
+else {
+  // Tag-based reference logic
+  const tags = await git.tags(['--sort=-v:refname'])
   // More logic...
 }
 ```
@@ -139,14 +140,14 @@ if (baseBranch) {
 ```javascript
 class ReferencePointStrategy {
   async execute(baseBranch, activeBranch) {
-    throw new Error('Strategy must implement execute method');
+    throw new Error('Strategy must implement execute method')
   }
 }
 
 class TagBasedReferenceStrategy extends ReferencePointStrategy {
   async execute(baseBranch, activeBranch) {
     // Tag-based reference logic
-    const tags = await git.tags(['--sort=-v:refname']);
+    const tags = await git.tags(['--sort=-v:refname'])
     // Return reference info
   }
 }
@@ -175,8 +176,9 @@ class BranchBasedReferenceStrategy extends ReferencePointStrategy {
 **Before** (Simple If Statement):
 ```javascript
 function getPackageManager() {
-  if (fs.stat(path.join(process.cwd(), 'yarn.lock')).catch(() => false)) return 'yarn';
-  return 'npm';
+  if (fs.stat(path.join(process.cwd(), 'yarn.lock')).catch(() => false))
+    return 'yarn'
+  return 'npm'
 }
 ```
 
@@ -184,7 +186,7 @@ function getPackageManager() {
 ```javascript
 class PackageManagerStrategy {
   detect() {
-    throw new Error('Strategy must implement detect method');
+    throw new Error('Strategy must implement detect method')
   }
 }
 
@@ -209,7 +211,7 @@ class PnpmDetectionStrategy extends PackageManagerStrategy {
 
 **Available Strategies**:
 - `YarnDetectionStrategy`: Detects Yarn via yarn.lock
-- `NpmDetectionStrategy`: Detects NPM via package-lock.json  
+- `NpmDetectionStrategy`: Detects NPM via package-lock.json
 - `PnpmDetectionStrategy`: Detects PNPM via pnpm-lock.yaml
 
 **Benefits**:
@@ -243,7 +245,7 @@ class CustomStrategy extends VersionBumpStrategy {
 }
 
 // Register it:
-VersionBumpStrategyFactory.strategies['custom'] = new CustomStrategy();
+VersionBumpStrategyFactory.strategies.custom = new CustomStrategy()
 ```
 
 ### 2. **Maintainability**
@@ -255,16 +257,16 @@ VersionBumpStrategyFactory.strategies['custom'] = new CustomStrategy();
 ```javascript
 // Unit test for specific strategy
 test('PreReleaseStrategy increments prerelease correctly', () => {
-  const strategy = new PreReleaseStrategy();
-  const result = strategy.execute('1.0.0-0', 'patch', 'patch');
-  expect(result).toBe('1.0.0-1');
-});
+  const strategy = new PreReleaseStrategy()
+  const result = strategy.execute('1.0.0-0', 'patch', 'patch')
+  expect(result).toBe('1.0.0-1')
+})
 ```
 
 ### 4. **Configuration Validation**
 ```javascript
 // Strategies are self-documenting
-const validStrategies = VersionBumpStrategyFactory.getAvailableStrategies();
+const validStrategies = VersionBumpStrategyFactory.getAvailableStrategies()
 // Returns: ['do-nothing', 'apply-bump', 'pre-release']
 ```
 
@@ -272,29 +274,29 @@ const validStrategies = VersionBumpStrategyFactory.getAvailableStrategies();
 
 ### Version Bump Strategy Usage:
 ```javascript
-const strategy = VersionBumpStrategyFactory.getStrategy('pre-release');
-const nextVersion = strategy.execute('1.0.0', 'patch', 'patch');
+const strategy = VersionBumpStrategyFactory.getStrategy('pre-release')
+const nextVersion = strategy.execute('1.0.0', 'patch', 'patch')
 // Returns: '1.1.0-0'
 ```
 
 ### Branch Cleanup Strategy Usage:
 ```javascript
-const cleanupStrategy = BranchCleanupStrategyFactory.getStrategy('semantic');
-await cleanupStrategy.execute(branches, versionedBranch, templateRegex, rootBump);
+const cleanupStrategy = BranchCleanupStrategyFactory.getStrategy('semantic')
+await cleanupStrategy.execute(branches, versionedBranch, templateRegex, rootBump)
 ```
 
 ### Reference Point Strategy Usage:
 ```javascript
-const strategy = ReferencePointStrategyFactory.getStrategy(baseBranch);
-const { referenceCommit, referenceVersion, shouldFinalizeVersions } = 
-  await strategy.execute(baseBranch, activeBranch);
+const strategy = ReferencePointStrategyFactory.getStrategy(baseBranch)
+const { referenceCommit, referenceVersion, shouldFinalizeVersions }
+  = await strategy.execute(baseBranch, activeBranch)
 ```
 
 ## Future Extension Opportunities
 
 The Strategy pattern implementation makes it easy to add:
 
-1. **New Version Strategies**: 
+1. **New Version Strategies**:
    - `semver-major-only`: Only allow major version bumps
    - `calendar-versioning`: Use CalVer instead of SemVer
    - `git-flow-strategy`: Different logic for different Git flow patterns

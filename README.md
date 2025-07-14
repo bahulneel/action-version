@@ -18,20 +18,20 @@ Add this action to your workflow:
 ```yaml
 - uses: bahulneel/action-version@main
   with:
-    # Optional: customize commit messages
-    # commit-template: 'chore(release): bump ${package} to ${version} (${bumpType})'
-    # dependency-commit-template: 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)'
-    
-    # Optional: configure strategy for same-type incremental changes
-    # strategy: 'do-nothing' # 'do-nothing' | 'apply-bump' | 'pre-release'
-    
-    # Optional: branch workflow
-    # create-branch: true
-    # base: 'main'
+  # Optional: customize commit messages
+  # commit-template: 'chore(release): bump ${package} to ${version} (${bumpType})'
+  # dependency-commit-template: 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)'
+
+  # Optional: configure strategy for same-type incremental changes
+  # strategy: 'do-nothing' # 'do-nothing' | 'apply-bump' | 'pre-release'
+
+  # Optional: branch workflow
+  # create-branch: true
+  # base: 'main'
 # branch: 'develop'
-    
-    # Optional: tagging
-    # tag-prereleases: false
+
+# Optional: tagging
+# tag-prereleases: false
 ```
 
 ## Inputs
@@ -53,7 +53,7 @@ Add this action to your workflow:
 The `strategy` input controls how the action handles same-type incremental changes:
 
 - **`do-nothing`** (default): Skip bumping when the required bump type matches the historical bump type
-- **`apply-bump`**: Always apply normal semver bumps (1.1.0 → 1.2.0 for minor changes)  
+- **`apply-bump`**: Always apply normal semver bumps (1.1.0 → 1.2.0 for minor changes)
 - **`pre-release`**: Use semantically correct prerelease versions (1.1.0 → 1.2.0-0 → 1.2.0-1)
 
 ### Prerelease Workflow
