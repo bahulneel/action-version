@@ -1275,6 +1275,7 @@ async function main() {
         throw new Error(`Final root package version is invalid: ${finalRootPkg.version}`);
       }
       core.debug(`[validation] Final root package version: ${finalRootPkg.version}`);
+      await gitStrategy.tagVersion(finalRootPkg.version, semver.prerelease(finalRootPkg.version) ? true : false, true);
     } catch (error) {
       core.error(`[validation] Failed to validate final package state: ${error.message}`);
       throw error;
