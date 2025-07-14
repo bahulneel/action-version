@@ -10,7 +10,8 @@
   },
   "scripts": {
     "build": "ncc build index.cjs -s -o dist",
-    "self": "node dist/index.cjs"
+    "self": "node dist/index.cjs",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@actions/core": "^1.11.1",
@@ -21,6 +22,8 @@
     "source-map-support": "^0.5.21"
   },
   "devDependencies": {
-    "@vercel/ncc": "^0.38.0"
+    "@eslint/js": "^9.31.0",
+    "@vercel/ncc": "^0.38.0",
+    "eslint": "^9.31.0"
   }
 }

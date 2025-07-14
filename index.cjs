@@ -1,4 +1,4 @@
-require('source-map-support').install()
+require('source-map-support').install();
 // index.js
 const core = require('@actions/core');
 const fs = require('fs/promises');
@@ -19,7 +19,7 @@ class VersionBumpStrategy {
     this.name = name;
   }
 
-  execute(currentVersion, commitBasedBump, historicalBump) {
+  execute(_currentVersion, _commitBasedBump, _historicalBump) {
     throw new Error('Strategy must implement execute method');
   }
 }
@@ -29,8 +29,8 @@ class DoNothingStrategy extends VersionBumpStrategy {
     super('do-nothing');
   }
 
-  execute(currentVersion, commitBasedBump, historicalBump) {
-    core.debug(`Strategy 'do-nothing': Skipping bump`);
+  execute(currentVersion, _commitBasedBump, _historicalBump) {
+    core.debug('Strategy \'do-nothing\': Skipping bump');
     return currentVersion; // No change
   }
 }
@@ -40,7 +40,7 @@ class ApplyBumpStrategy extends VersionBumpStrategy {
     super('apply-bump');
   }
 
-  execute(currentVersion, commitBasedBump, historicalBump) {
+  execute(currentVersion, commitBasedBump, _historicalBump) {
     const current = semver.coerce(currentVersion) || '0.0.0';
     const nextVersion = semver.inc(current, commitBasedBump);
     core.debug(`Strategy 'apply-bump': Normal semver bump ${current} → ${nextVersion}`);
@@ -53,7 +53,7 @@ class PreReleaseStrategy extends VersionBumpStrategy {
     super('pre-release');
   }
 
-  execute(currentVersion, commitBasedBump, historicalBump) {
+  execute(currentVersion, commitBasedBump, _historicalBump) {
     const current = semver.coerce(currentVersion) || '0.0.0';
 
     if (semver.prerelease(current)) {
@@ -96,7 +96,7 @@ class BranchCleanupStrategy {
     this.name = name;
   }
 
-  async execute(branches, versionedBranch, templateRegex, rootBump) {
+  async execute(_branches, _versionedBranch, _templateRegex, _rootBump) {
     throw new Error('Strategy must implement execute method');
   }
 }
@@ -106,7 +106,7 @@ class KeepAllBranchesStrategy extends BranchCleanupStrategy {
     super('keep');
   }
 
-  async execute(branches, versionedBranch, templateRegex, rootBump) {
+  async execute(_branches, _versionedBranch, _templateRegex, _rootBump) {
     core.info(`[root] Branch cleanup strategy: ${this.name} - keeping all branches`);
     // Do nothing - keep all branches
   }
@@ -117,7 +117,7 @@ class PruneOldBranchesStrategy extends BranchCleanupStrategy {
     super('prune');
   }
 
-  async execute(branches, versionedBranch, templateRegex, rootBump) {
+  async execute(branches, versionedBranch, templateRegex, _rootBump) {
     core.info(`[root] Branch cleanup strategy: ${this.name} - removing old branches`);
 
     for (const branch of branches.all) {
@@ -207,7 +207,7 @@ class ReferencePointStrategy {
     this.name = name;
   }
 
-  async execute(baseBranch, activeBranch) {
+  async execute(_baseBranch, _activeBranch) {
     throw new Error('Strategy must implement execute method');
   }
 }
@@ -217,8 +217,8 @@ class TagBasedReferenceStrategy extends ReferencePointStrategy {
     super('tag-based');
   }
 
-  async execute(baseBranch, activeBranch) {
-    core.info(`[root] Using latest tag as reference`);
+  async execute(_baseBranch, _activeBranch) {
+    core.info('[root] Using latest tag as reference');
     const tags = await git.tags(['--sort=-v:refname']);
     const latestTag = tags.latest;
 
@@ -260,7 +260,7 @@ class BranchBasedReferenceStrategy extends ReferencePointStrategy {
         const baseCommit = await lastNonMergeCommit(git, `origin/${baseBranch}`);
 
         if (activeCommit === baseCommit) {
-          core.info(`[root] Active and base branches are at same commit - checking for prerelease finalization`);
+          core.info('[root] Active and base branches are at same commit - checking for prerelease finalization');
           shouldFinalizeVersions = true;
         }
       } catch (error) {
@@ -467,10 +467,10 @@ class Package {
 const safeGetBooleanInput = (input, defaultValue) => {
   try {
     return core.getBooleanInput(input) ?? defaultValue;
-  } catch (error) {
+  } catch (_error) {
     return defaultValue;
   }
-}
+};
 
 async function parseConfiguration() {
   const commitMsgTemplate = core.getInput('commit_template') || 'chore(release): bump ${package} to ${version} (${bumpType})';
@@ -531,9 +531,9 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
   await git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com');
 
   try {
-    core.debug(`[git] Fetching latest changes from origin`);
+    core.debug('[git] Fetching latest changes from origin');
     await git.fetch(['--prune', 'origin']);
-    core.debug(`[git] Successfully fetched from origin`);
+    core.debug('[git] Successfully fetched from origin');
   } catch (error) {
     core.warning(`[git] Failed to fetch from origin: ${error.message}`);
   }
@@ -615,7 +615,7 @@ async function finalizePackageVersions(packages, rootPkg, commitMsgTemplate, git
   const bumped = {};
   let hasBumped = false;
 
-  core.info(`[root] Finalizing prerelease versions for base branch update`);
+  core.info('[root] Finalizing prerelease versions for base branch update');
 
   for (const pkg of packages) {
     const result = await pkg.finalizePrerelease(commitMsgTemplate, gitStrategy);
@@ -642,14 +642,14 @@ async function finalizePackageVersions(packages, rootPkg, commitMsgTemplate, git
   }
 
   if (hasBumped) {
-    core.info(`[root] Prerelease finalization complete`);
+    core.info('[root] Prerelease finalization complete');
 
     // Create release tags for finalized versions using git strategy
     if (rootPkg.version) {
       await gitStrategy.tagVersion(rootPkg.version, false, true); // Force tagging for finalized releases
     }
   } else {
-    core.info(`[root] No prerelease versions found to finalize`);
+    core.info('[root] No prerelease versions found to finalize');
   }
 
   return { bumped, hasBumped };
@@ -727,7 +727,7 @@ async function processRootPackage(rootPkg, bumped, referenceCommit, referenceVer
   } else if (workspaceBump) {
     core.info(`[root@${rootPkg.version}] No changes requiring version bump`);
   } else {
-    core.info(`[root] Root was bumped in workspace processing`);
+    core.info('[root] Root was bumped in workspace processing');
   }
 
   return { bumped, hasBumped };
@@ -754,7 +754,7 @@ async function generateSummary(bumped, testFailures, strategy, activeBranch, bas
       { data: bumpType },
       { data: sha?.slice(0, 7) || 'N/A' },
       { data: testFailures.includes(name) ? ':x: Failed' : ':white_check_mark: Success' }
-    ]),
+    ])
   ]);
 
   // Add configuration summary
@@ -809,7 +809,7 @@ async function handleBranchOperations(newBranch, hasBumped, rootPkg, branchTempl
   if (newBranch && hasBumped) {
     const versionedBranch = interpolate(branchTemplate, {
       version: rootPkg.version
-    })
+    });
     const remoteVersionedBranch = `origin/${versionedBranch}`;
     const branches = await git.branch(['--list', '--remote']);
     if (branches.all.includes(remoteVersionedBranch)) {
@@ -846,7 +846,7 @@ function getPackageManager() {
   return PackageManagerFactory.getPackageManager();
 }
 
-async function testPackage(packageDir) {
+async function _testPackage(packageDir) {
   const packageManager = getPackageManager();
   try {
     const testResult = await packageManager.test(packageDir);
@@ -947,7 +947,7 @@ function parseCommits(log, sinceRef) {
       scope: parsed.scope,
       subject: parsed.subject,
       breaking,
-      header: parsed.header,
+      header: parsed.header
     });
   }
   return commits;
@@ -1016,7 +1016,7 @@ async function getCommitsAffecting(dir, sinceRef) {
 }
 
 // Get commits affecting root directory but excluding workspace directories
-async function getRootOnlyCommits(rootDir, workspaceDirs, sinceRef) {
+async function _getRootOnlyCommits(rootDir, workspaceDirs, sinceRef) {
   let range = sinceRef ? `${sinceRef}..HEAD` : 'HEAD';
 
   // Build pathspec to exclude workspace directories
@@ -1043,7 +1043,7 @@ async function getRootOnlyCommits(rootDir, workspaceDirs, sinceRef) {
   }
 }
 
-async function commit(dir, msg) {
+async function _commit(dir, msg) {
   const relativePath = path.relative(process.cwd(), dir) || '.';
   const packageJsonPath = path.join(dir, 'package.json');
 
@@ -1061,7 +1061,7 @@ async function commit(dir, msg) {
   }
 }
 
-async function tagVersion(lastTag, version, tagPrereleases = false) {
+async function _tagVersion(lastTag, version, tagPrereleases = false) {
   const tagName = `v${version}`;
   if (!version) {
     core.warning('No version found, skipping tag');
@@ -1093,7 +1093,7 @@ async function install(dir, packageManager) {
   return result.status === 0;
 }
 
-async function runTest(dir, packageManager) {
+async function _runTest(dir, packageManager) {
   try {
     if (!await install(dir, packageManager)) return false;
     const result = spawnSync(packageManager, ['test'], { cwd: dir, stdio: 'inherit' });
@@ -1161,7 +1161,7 @@ async function getVersionAtCommit(packageJsonPath, commitRef) {
 // Note: calculateBumpType() already replaced above in the version functions section
 
 // Check if dependency spec is compatible with new version
-function isDepCompatible(depSpec, newVersion) {
+function _isDepCompatible(depSpec, newVersion) {
   if (!depSpec || depSpec === '*') return true;
 
   try {
@@ -1205,11 +1205,11 @@ async function main() {
       templateRegex, branchCleanup, baseBranch, strategy, activeBranch, tagPrereleases } = config;
 
     // Step 2: Setup git and determine branches
-    const { currentBranch, newBranch } = await setupGit(shouldCreateBranch, branchTemplate);
+    const { currentBranch: _currentBranch, newBranch } = await setupGit(shouldCreateBranch, branchTemplate);
 
     // Step 3: Load root package and setup workspace
     const rootDir = process.cwd();
-    const rootPkg = await readJSON(path.join(rootDir, "package.json"));
+    const rootPkg = await readJSON(path.join(rootDir, 'package.json'));
     const packageManager = getPackageManager();
 
     // Initialize strategies
@@ -1223,13 +1223,13 @@ async function main() {
 
     // Step 5: Discover packages and build dependency graph
     const pkgDirs = await getPackageDirs(rootPkg);
-    const { graph, nameToDir } = await buildDepGraph(pkgDirs);
+    const { graph, nameToDir: _nameToDir } = await buildDepGraph(pkgDirs);
     const order = topoSort(graph);
 
     // Create Package instances for easier management
     const packages = order.map(name => {
       const { dir, pkg } = graph[name];
-      const packageJsonPath = path.join(dir, "package.json");
+      const packageJsonPath = path.join(dir, 'package.json');
       return new Package(name, dir, pkg, packageJsonPath);
     });
 
@@ -1263,14 +1263,14 @@ async function main() {
 
     // Step 9: Final validation and completion
     if (hasBumped) {
-      core.info("✅ Version bump action completed successfully with changes");
+      core.info('✅ Version bump action completed successfully with changes');
     } else {
-      core.info("✅ Version bump action completed successfully with no changes needed");
+      core.info('✅ Version bump action completed successfully with no changes needed');
     }
 
     // Validate final state
     try {
-      const finalRootPkg = await readJSON(path.join(rootDir, "package.json"));
+      const finalRootPkg = await readJSON(path.join(rootDir, 'package.json'));
       if (finalRootPkg.version && !semver.valid(finalRootPkg.version)) {
         throw new Error(`Final root package version is invalid: ${finalRootPkg.version}`);
       }
@@ -1290,14 +1290,14 @@ async function main() {
       try {
         if (outputBranch) {
           core.info(`[git] Pushing ${outputBranch} to origin`);
-          await git.push("origin", outputBranch, ["--set-upstream", "--force"]);
-          core.setOutput("branch", outputBranch);
+          await git.push('origin', outputBranch, ['--set-upstream', '--force']);
+          core.setOutput('branch', outputBranch);
           core.info(`[git] Successfully pushed ${outputBranch}`);
         } else {
-          core.info(`[git] Pushing current branch and tags`);
+          core.info('[git] Pushing current branch and tags');
           await git.push();
           await git.pushTags();
-          core.info(`[git] Successfully pushed changes and tags`);
+          core.info('[git] Successfully pushed changes and tags');
         }
       } catch (error) {
         core.error(`[git] Failed to push changes: ${error.message}`);
@@ -1305,7 +1305,7 @@ async function main() {
         exitCode = 1;
       }
     } else {
-      core.info(`[git] No changes to push`);
+      core.info('[git] No changes to push');
     }
   }
   core.summary.write({ overwrite: true });
@@ -1318,4 +1318,4 @@ function guessBumpType(version) {
   return 'patch';
 }
 
-main(); 
+main();
