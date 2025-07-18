@@ -1,61 +1,56 @@
-# Strategy Pattern Library
+# ESLint Configuration
 
-This directory contains the strategy pattern implementations for the version bump action.
+This project uses ESLint with the [@antfu/eslint-config](https://github.com/antfu/eslint-config) library for code quality and consistency.
 
-## Structure
+## Setup
 
-```
-lib/
-├── package-managers/          # Package manager strategies
-│   ├── base.cjs              # Base PackageManagerStrategy class
-│   ├── yarn.cjs              # Yarn package manager strategy
-│   ├── npm.cjs               # NPM package manager strategy
-│   ├── pnpm.cjs              # PNPM package manager strategy
-│   ├── factory.cjs           # PackageManagerFactory
-│   └── index.cjs             # Exports all package manager strategies
-├── git-operations/           # Git operation strategies
-│   ├── base.cjs              # Base GitOperationStrategy class
-│   ├── conventional.cjs      # Conventional commit strategy
-│   ├── simple.cjs            # Simple commit strategy
-│   ├── factory.cjs           # GitOperationStrategyFactory
-│   └── index.cjs             # Exports all git operation strategies
-└── index.cjs                 # Main lib index, exports all strategies
-```
+The ESLint configuration is in `eslint.config.js` at the root of the project. It's configured specifically for:
+
+- CommonJS Node.js code
+- GitHub Actions environment
+- Strategy pattern implementations
 
 ## Usage
 
-### Package Manager Strategies
+### Check for issues
 
-Package manager strategies encapsulate the behavior for different package managers:
-
-```javascript
-const { PackageManagerFactory } = require('./lib/package-managers/factory.cjs')
-
-const packageManager = PackageManagerFactory.getPackageManager()
-await packageManager.install('./some-package')
-await packageManager.test('./some-package')
+```bash
+npm run lint
 ```
 
-### Git Operation Strategies
+### Fix issues automatically
 
-Git operation strategies encapsulate git workflow behaviors:
-
-```javascript
-const { GitOperationStrategyFactory } = require('./lib/git-operations/factory.cjs')
-
-const gitStrategy = GitOperationStrategyFactory.getStrategy('conventional')
-await gitStrategy.commitVersionChange('./package', 'my-package', '1.0.0', 'patch', template)
-await gitStrategy.tagVersion('1.0.0', false, true)
+```bash
+npm run lint:fix
 ```
 
-## Design Principles
+## Configuration Details
 
-- **Behavior Encapsulation**: Each strategy encapsulates complete behaviors, not just data transformation
-- **Command Construction**: Strategies handle command construction and execution internally
-- **Separation of Concerns**: Package management and git operations are separate strategy families
-- **Factory Pattern**: Factories provide easy access to appropriate strategies
-- **Extensibility**: New strategies can be added by implementing the base class and registering with the factory
+The configuration includes:
 
-## Files use .cjs extension
+- **Node.js support**: Enabled for server-side code
+- **CommonJS compatibility**: Allows `require()` statements
+- **GitHub Actions**: Allows console statements for logging
+- **Strategy patterns**: Allows unused parameters with underscore prefix
+- **Flexible formatting**: Disabled strict formatting rules for CommonJS style
 
-All files use the `.cjs` extension to ensure they work correctly with CommonJS imports in projects that have `"type": "module"` in their package.json.
+## Rules
+
+Key rules that are disabled or modified:
+
+- `node/prefer-global/process`: Off (CommonJS uses global process)
+- `no-undef`: Warning (for functions defined elsewhere)
+- `no-template-curly-in-string`: Off (for template strings)
+- `unused-imports/no-unused-vars`: Error with underscore prefix pattern
+- `no-unused-vars`: Off (replaced by unused-imports rule)
+
+## Ignored Files
+
+The following files/directories are ignored:
+
+- `node_modules/`
+- `dist/`
+- `coverage/`
+- `.git/`
+- `*.min.js`
+- `action.yml`

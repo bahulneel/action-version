@@ -1,3 +1,4 @@
+// @ts-check
 require('source-map-support').install()
 const { execSync } = require('node:child_process')
 const fs = require('node:fs/promises')
@@ -7,7 +8,7 @@ const core = require('@actions/core')
 const conventionalCommitsParser = require('conventional-commits-parser')
 const { globSync } = require('glob')
 const semver = require('semver')
-const simpleGit = require('simple-git')
+const simpleGit = require('simple-git').default
 
 const git = simpleGit()
 
@@ -270,8 +271,8 @@ class BranchBasedReferenceStrategy extends ReferencePointStrategy {
           shouldFinalizeVersions = true
         }
       }
-      catch (error) {
-        core.debug(`Could not compare active/base branches: ${error.message}`)
+      catch (_error) {
+        core.debug(`Could not compare active/base branches: ${_error.message}`)
       }
     }
 
@@ -478,7 +479,7 @@ function safeGetBooleanInput(input, defaultValue) {
   try {
     return core.getBooleanInput(input) ?? defaultValue
   }
-  catch (error) {
+  catch (_error) {
     return defaultValue
   }
 }
@@ -1079,7 +1080,7 @@ async function main() {
     const { commitMsgTemplate, depCommitMsgTemplate, shouldCreateBranch, branchTemplate, templateRegex, branchCleanup, baseBranch, strategy, activeBranch, tagPrereleases } = config
 
     // Step 2: Setup git and determine branches
-    const { currentBranch, newBranch } = await setupGit(shouldCreateBranch, branchTemplate)
+    const { currentBranch: _currentBranch, newBranch } = await setupGit(shouldCreateBranch, branchTemplate)
 
     // Step 3: Load root package and setup workspace
     const rootDir = process.cwd()
@@ -1097,7 +1098,7 @@ async function main() {
 
     // Step 5: Discover packages and build dependency graph
     const pkgDirs = await getPackageDirs(rootPkg)
-    const { graph, nameToDir } = await buildDepGraph(pkgDirs)
+    const { graph, nameToDir: _nameToDir } = await buildDepGraph(pkgDirs)
     const order = topoSort(graph)
 
     // Create Package instances for easier management
