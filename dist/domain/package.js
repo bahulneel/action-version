@@ -40,6 +40,7 @@ exports.Package = void 0;
 const core = __importStar(require("@actions/core"));
 const promises_1 = require("node:fs/promises");
 const node_path_1 = __importDefault(require("node:path"));
+const index_js_1 = require("../types/index.js");
 const version_js_1 = require("../utils/version.js");
 const versioning_js_1 = require("../utils/versioning.js");
 const git_js_1 = require("../utils/git.js");
@@ -137,7 +138,7 @@ class Package {
         }
         this.version = nextVersion;
         await this.save();
-        const bumpType = this.determineBumpType(nextVersion, commitBasedBump);
+        const bumpType = this.determineBumpType(commitBasedBump);
         await gitStrategy.commitVersionChange(this.dir, this.name, this.version, bumpType, commitMsgTemplate);
         const result = {
             version: this.version,
@@ -173,7 +174,7 @@ class Package {
      */
     async updateDependency(depName, newVersion, depCommitMsgTemplate, gitStrategy) {
         let updated = false;
-        for (const depKey of DEPENDENCY_KEYS) {
+        for (const depKey of index_js_1.DEPENDENCY_KEYS) {
             const deps = this._pkg[depKey];
             if (deps && deps[depName]) {
                 const currentDepSpec = deps[depName];
@@ -213,7 +214,7 @@ class Package {
         }
         this.version = nextVersion;
         await this.save();
-        const finalBumpType = this.determineBumpType(nextVersion, bumpType);
+        const finalBumpType = this.determineBumpType(bumpType);
         await gitStrategy.commitVersionChange(this.dir, this.name, this.version, finalBumpType, commitMsgTemplate);
         const result = {
             version: this.version,
@@ -241,7 +242,7 @@ class Package {
         // Add proper semver diff logic here
         return 'patch';
     }
-    determineBumpType(version, commitBasedBump) {
+    determineBumpType(commitBasedBump) {
         return this.isPrerelease() ? 'prerelease' : commitBasedBump || 'patch';
     }
     satisfiesVersion(newVersion, currentSpec) {
