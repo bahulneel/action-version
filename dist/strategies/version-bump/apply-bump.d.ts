@@ -6,6 +6,6 @@ import { BaseVersionBumpStrategy } from './base.js';
  */
 export declare class ApplyBumpStrategy extends BaseVersionBumpStrategy {
     constructor();
-    execute(currentVersion: string, commitBasedBump: BumpType | null, historicalBump: BumpType | null): string | null;
+    execute(currentVersion: string, commitBasedBump: BumpType | null, _historicalBump: BumpType | null): string | null;
 }
 //# sourceMappingURL=apply-bump.d.ts.map

@@ -45,7 +45,7 @@ class PreReleaseStrategy extends base_js_1.BaseVersionBumpStrategy {
     constructor() {
         super('pre-release');
     }
-    execute(currentVersion, commitBasedBump, historicalBump) {
+    execute(currentVersion, commitBasedBump, _historicalBump) {
         if (!commitBasedBump || !['major', 'minor', 'patch'].includes(commitBasedBump)) {
             core.debug(`Strategy 'pre-release': No valid bump type provided: ${commitBasedBump}`);
             return null;

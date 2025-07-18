@@ -1,6 +1,5 @@
 {
   "name": "action-version",
-  "type": "module",
   "version": "0.29.0",
   "description": "GitHub Action for automated version bumping and dependency management in monorepos using Conventional Commits.",
   "license": "MIT",
@@ -9,9 +8,9 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "build": "tsc && ncc build dist/index.js -s -o dist --source-map",
+    "build": "tsc && ncc build dist/index.js -s -o dist --source-map && mv dist/index.js dist/index.cjs",
     "build:tsc": "tsc",
-    "build:ncc": "ncc build dist/index.js -s -o dist --source-map",
+    "build:ncc": "ncc build dist/index.js -s -o dist --source-map && mv dist/index.js dist/index.cjs",
     "dev": "tsc --watch",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",

@@ -44,8 +44,8 @@ class DoNothingStrategy extends base_js_1.BaseVersionBumpStrategy {
     constructor() {
         super('do-nothing');
     }
-    execute(currentVersion, commitBasedBump, historicalBump) {
-        core.debug(`Strategy 'do-nothing': Skipping bump for ${currentVersion}`);
+    execute(_currentVersion, _commitBasedBump, _historicalBump) {
+        core.debug(`Strategy 'do-nothing': Skipping bump`);
         return null; // Explicitly return null to indicate no change
     }
 }

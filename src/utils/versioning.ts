@@ -2,7 +2,6 @@ import * as core from '@actions/core';
 import * as semver from 'semver';
 import type { BumpType, StrategyName } from '../types/index.js';
 import { VersionBumpStrategyFactory } from '../strategies/version-bump/factory.js';
-import { calculateBumpType } from './version.js';
 
 /**
  * Get the next version based on current version, bump types, and strategy.
@@ -80,7 +79,7 @@ export function parseVersionComponents(version: string): {
     major: parsed.major,
     minor: parsed.minor,
     patch: parsed.patch,
-    prerelease: parsed.prerelease,
+    prerelease: parsed.prerelease.map(String),
   };
 }
 

@@ -6,6 +6,6 @@ import { BaseBranchCleanupStrategy } from './base.js';
  */
 export declare class KeepAllBranchesStrategy extends BaseBranchCleanupStrategy {
     constructor();
-    execute(branches: GitBranches, versionedBranch: string, templateRegex: RegExp, rootBump: BumpType): Promise<void>;
+    execute(_branches: GitBranches, _versionedBranch: string, _templateRegex: RegExp, _rootBump: BumpType): Promise<void>;
 }
 //# sourceMappingURL=keep-all.d.ts.map

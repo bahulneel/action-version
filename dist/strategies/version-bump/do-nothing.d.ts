@@ -6,6 +6,6 @@ import { BaseVersionBumpStrategy } from './base.js';
  */
 export declare class DoNothingStrategy extends BaseVersionBumpStrategy {
     constructor();
-    execute(currentVersion: string, commitBasedBump: BumpType | null, historicalBump: BumpType | null): string | null;
+    execute(_currentVersion: string, _commitBasedBump: BumpType | null, _historicalBump: BumpType | null): string | null;
 }
 //# sourceMappingURL=do-nothing.d.ts.map

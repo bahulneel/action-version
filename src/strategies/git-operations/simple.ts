@@ -19,8 +19,8 @@ export class SimpleGitStrategy extends BaseGitOperationStrategy {
     packageDir: string,
     packageName: string,
     version: string,
-    bumpType: BumpType,
-    template: string
+    _bumpType: BumpType,
+    _template: string
   ): Promise<void> {
     const commitMessage = `Bump ${packageName} to ${version}`;
 
@@ -40,8 +40,8 @@ export class SimpleGitStrategy extends BaseGitOperationStrategy {
     packageDir: string,
     packageName: string,
     depName: string,
-    depVersion: string,
-    template: string
+    _depVersion: string,
+    _template: string
   ): Promise<void> {
     const commitMessage = `Update ${depName} in ${packageName}`;
 
@@ -59,7 +59,7 @@ export class SimpleGitStrategy extends BaseGitOperationStrategy {
 
   public async tagVersion(
     version: string,
-    isPrerelease: boolean,
+    _isPrerelease: boolean,
     shouldTag: boolean
   ): Promise<void> {
     if (!shouldTag) {

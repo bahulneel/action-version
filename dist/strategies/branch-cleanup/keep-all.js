@@ -44,7 +44,7 @@ class KeepAllBranchesStrategy extends base_js_1.BaseBranchCleanupStrategy {
     constructor() {
         super('keep');
     }
-    async execute(branches, versionedBranch, templateRegex, rootBump) {
+    async execute(_branches, _versionedBranch, _templateRegex, _rootBump) {
         core.info(`[root] Branch cleanup strategy: ${this.name} - keeping all branches`);
         // Intentionally empty - keep all branches
     }

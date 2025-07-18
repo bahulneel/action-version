@@ -173,7 +173,7 @@ class VersionBumpService {
     /**
      * Process root package version bump based on workspace changes.
      */
-    async processRootPackage(rootPkg, workspaceBumped, referencePoint, config) {
+    async processRootPackage(rootPkg, workspaceBumped, referencePoint, _config) {
         if (!rootPkg.workspaces) {
             return { bumped: {}, hasBumped: false };
         }

@@ -18,7 +18,7 @@ export class PruneOldBranchesStrategy extends BaseBranchCleanupStrategy {
     branches: GitBranches,
     versionedBranch: string,
     templateRegex: RegExp,
-    rootBump: BumpType
+    _rootBump: BumpType
   ): Promise<void> {
     core.info(`[root] Branch cleanup strategy: ${this.name} - removing old branches`);
 

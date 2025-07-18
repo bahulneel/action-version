@@ -39,10 +39,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ConventionalGitStrategy = void 0;
 const core = __importStar(require("@actions/core"));
 const simple_git_1 = __importDefault(require("simple-git"));
-const node_path_1 = __importDefault(require("node:path"));
 const base_js_1 = require("./base.js");
 const template_js_1 = require("../../utils/template.js");
-const git = (0, simple_git_1.default)();
 /**
  * Conventional git strategy that uses conventional commit messages
  * and follows standard git practices for version management.
@@ -52,69 +50,45 @@ class ConventionalGitStrategy extends base_js_1.BaseGitOperationStrategy {
         super('conventional');
     }
     async commitVersionChange(packageDir, packageName, version, bumpType, template) {
-        const relativePath = node_path_1.default.relative(process.cwd(), packageDir) || '.';
-        const commitMessage = (0, template_js_1.interpolateTemplate)(template, {
-            package: packageName,
+        const git = (0, simple_git_1.default)(packageDir);
+        // Template the commit message
+        const message = (0, template_js_1.interpolateTemplate)(template, {
+            packageName,
             version,
-            bumpType,
+            bumpType
         });
-        try {
-            await git.add(node_path_1.default.join(packageDir, 'package.json'));
-            await git.commit(commitMessage, undefined, {
-                '--allow-empty': null,
-            });
-            core.info(`[${packageName}] Committed version change: ${commitMessage}`);
-        }
-        catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            core.error(`[${packageName}] Failed to commit version change: ${errorMessage}`);
-            throw new Error(`Failed to commit version change for ${packageName}: ${errorMessage}`);
-        }
+        await git.add('package.json');
+        await git.commit(message);
+        core.info(`[${packageName}] Committed version change: ${version}`);
     }
     async commitDependencyUpdate(packageDir, packageName, depName, depVersion, template) {
-        const relativePath = node_path_1.default.relative(process.cwd(), packageDir) || '.';
-        const commitMessage = (0, template_js_1.interpolateTemplate)(template, {
-            package: packageName,
-            depPackage: depName,
-            depVersion,
+        const git = (0, simple_git_1.default)(packageDir);
+        // Template the commit message  
+        const message = (0, template_js_1.interpolateTemplate)(template, {
+            packageName,
+            dependencyName: depName,
+            dependencyVersion: depVersion
         });
-        try {
-            await git.add(node_path_1.default.join(packageDir, 'package.json'));
-            await git.commit(commitMessage, undefined, {
-                '--allow-empty': null,
-            });
-            core.info(`[${packageName}] Committed dependency update: ${commitMessage}`);
-        }
-        catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            core.error(`[${packageName}] Failed to commit dependency update: ${errorMessage}`);
-            throw new Error(`Failed to commit dependency update for ${packageName}: ${errorMessage}`);
-        }
+        await git.add('package.json');
+        await git.commit(message);
+        core.info(`[${packageName}] Committed dependency update: ${depName}@${depVersion}`);
     }
     async tagVersion(version, isPrerelease, shouldTag) {
         if (!shouldTag) {
-            core.debug(`[git] Skipping tag creation for ${version} (shouldTag=${shouldTag})`);
+            core.info(`[root] Skipping tag creation for ${version}`);
             return;
         }
-        if (isPrerelease && !shouldTag) {
-            core.debug(`[git] Skipping prerelease tag for ${version}`);
-            return;
-        }
+        const git = (0, simple_git_1.default)(process.cwd());
         const tagName = `v${version}`;
-        const tagMessage = isPrerelease
-            ? `Pre-release version ${version}`
-            : `Release version ${version}`;
+        const tagMessage = `chore(release): ${version}`;
         try {
-            await git.addTag(tagName, undefined, {
-                '-a': null,
-                '-m': tagMessage,
-            });
-            core.info(`[git] Created tag ${tagName}: ${tagMessage}`);
+            // Create annotated tag with message
+            await git.tag([tagName, '-a', '-m', tagMessage]);
+            core.info(`[root] Created ${isPrerelease ? 'prerelease ' : ''}tag: ${tagName}`);
         }
         catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            core.warning(`[git] Failed to create tag ${tagName}: ${errorMessage}`);
-            // Don't throw here - tag creation failure shouldn't fail the entire process
+            core.error(`Failed to create tag ${tagName}: ${error}`);
+            throw error;
         }
     }
 }

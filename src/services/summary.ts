@@ -1,6 +1,7 @@
 import * as core from '@actions/core';
-import * as semver from 'semver';
-import type { ActionConfiguration } from '../types/index.js';
+import type { 
+  ActionConfiguration
+} from '../types/index.js';
 import type { VersionBumpResults } from './version-bump.js';
 
 /**

@@ -1,7 +1,6 @@
 import 'source-map-support/register';
 import * as core from '@actions/core';
-import type { ActionConfiguration, PackageJson } from './types/index.js';
-import { validateConfiguration } from './utils/validation.js';
+import type { ActionConfiguration } from './types/index.js';
 import { setupGit, pushChanges } from './utils/git.js';
 import { findRootPackage, createWorkspacePackages } from './utils/workspace.js';
 import { GitOperationStrategyFactory } from './strategies/git-operations/factory.js';
@@ -35,7 +34,7 @@ class VersionBumpApplication {
       this.outputBranch = gitSetup.newBranch;
 
       // Step 3: Load root package and initialize services
-      const { pkg: rootPkg, path: rootPath } = await findRootPackage();
+      const { pkg: rootPkg } = await findRootPackage();
       const packageManager = PackageManagerFactory.getPackageManager();
       const gitStrategy = GitOperationStrategyFactory.getStrategy('conventional');
       

@@ -6,6 +6,6 @@ import { BaseVersionBumpStrategy } from './base.js';
  */
 export declare class PreReleaseStrategy extends BaseVersionBumpStrategy {
     constructor();
-    execute(currentVersion: string, commitBasedBump: BumpType | null, historicalBump: BumpType | null): string | null;
+    execute(currentVersion: string, commitBasedBump: BumpType | null, _historicalBump: BumpType | null): string | null;
 }
 //# sourceMappingURL=pre-release.d.ts.map

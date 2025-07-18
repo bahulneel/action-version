@@ -12,11 +12,11 @@ export class DoNothingStrategy extends BaseVersionBumpStrategy {
   }
 
   public execute(
-    currentVersion: string,
-    commitBasedBump: BumpType | null,
-    historicalBump: BumpType | null
+    _currentVersion: string,
+    _commitBasedBump: BumpType | null,
+    _historicalBump: BumpType | null
   ): string | null {
-    core.debug(`Strategy 'do-nothing': Skipping bump for ${currentVersion}`);
+    core.debug(`Strategy 'do-nothing': Skipping bump`);
     return null; // Explicitly return null to indicate no change
   }
 }

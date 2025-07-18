@@ -25,9 +25,9 @@ export function parseCommits(logEntries: any[], sinceRef?: string): CommitInfo[]
     );
     
     commits.push({
-      type: parsed.type,
-      scope: parsed.scope,
-      subject: parsed.subject,
+      type: parsed.type || null,
+      scope: parsed.scope || null,
+      subject: parsed.subject || null,
       breaking,
       header: parsed.header,
     });
@@ -46,7 +46,7 @@ export function getMostSignificantBump(commits: readonly CommitInfo[]): BumpType
     if (commit.breaking) {
       return 'major'; // Breaking changes always result in major
     }
-    if (commit.type === 'feat' && bump !== 'major') {
+    if (commit.type === 'feat') {
       bump = 'minor';
     }
   }

@@ -50,7 +50,7 @@ class SimpleGitStrategy extends base_js_1.BaseGitOperationStrategy {
     constructor() {
         super('simple');
     }
-    async commitVersionChange(packageDir, packageName, version, bumpType, template) {
+    async commitVersionChange(packageDir, packageName, version, _bumpType, _template) {
         const commitMessage = `Bump ${packageName} to ${version}`;
         try {
             await git.add(node_path_1.default.join(packageDir, 'package.json'));
@@ -63,7 +63,7 @@ class SimpleGitStrategy extends base_js_1.BaseGitOperationStrategy {
             throw new Error(`Failed to commit version change for ${packageName}: ${errorMessage}`);
         }
     }
-    async commitDependencyUpdate(packageDir, packageName, depName, depVersion, template) {
+    async commitDependencyUpdate(packageDir, packageName, depName, _depVersion, _template) {
         const commitMessage = `Update ${depName} in ${packageName}`;
         try {
             await git.add(node_path_1.default.join(packageDir, 'package.json'));
@@ -76,7 +76,7 @@ class SimpleGitStrategy extends base_js_1.BaseGitOperationStrategy {
             throw new Error(`Failed to commit dependency update for ${packageName}: ${errorMessage}`);
         }
     }
-    async tagVersion(version, isPrerelease, shouldTag) {
+    async tagVersion(version, _isPrerelease, shouldTag) {
         if (!shouldTag) {
             core.debug(`[git] Skipping tag creation for ${version}`);
             return;

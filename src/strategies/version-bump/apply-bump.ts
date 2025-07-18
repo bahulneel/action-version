@@ -15,7 +15,7 @@ export class ApplyBumpStrategy extends BaseVersionBumpStrategy {
   public execute(
     currentVersion: string,
     commitBasedBump: BumpType | null,
-    historicalBump: BumpType | null
+    _historicalBump: BumpType | null
   ): string | null {
     if (!commitBasedBump || !['major', 'minor', 'patch'].includes(commitBasedBump)) {
       core.debug(`Strategy 'apply-bump': No valid bump type provided: ${commitBasedBump}`);

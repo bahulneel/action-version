@@ -58,9 +58,9 @@ function parseCommits(logEntries, sinceRef) {
         const breaking = Boolean((parsed.notes && parsed.notes.find(n => n.title === 'BREAKING CHANGE')) ||
             (typeof parsed.header === 'string' && /!:/.test(parsed.header)));
         commits.push({
-            type: parsed.type,
-            scope: parsed.scope,
-            subject: parsed.subject,
+            type: parsed.type || null,
+            scope: parsed.scope || null,
+            subject: parsed.subject || null,
             breaking,
             header: parsed.header,
         });
@@ -76,7 +76,7 @@ function getMostSignificantBump(commits) {
         if (commit.breaking) {
             return 'major'; // Breaking changes always result in major
         }
-        if (commit.type === 'feat' && bump !== 'major') {
+        if (commit.type === 'feat') {
             bump = 'minor';
         }
     }

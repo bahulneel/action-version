@@ -6,7 +6,7 @@ import { BaseBranchCleanupStrategy } from './base.js';
  */
 export declare class PruneOldBranchesStrategy extends BaseBranchCleanupStrategy {
     constructor();
-    execute(branches: GitBranches, versionedBranch: string, templateRegex: RegExp, rootBump: BumpType): Promise<void>;
+    execute(branches: GitBranches, versionedBranch: string, templateRegex: RegExp, _rootBump: BumpType): Promise<void>;
     private isVersionBranch;
     private deleteBranchSafely;
 }

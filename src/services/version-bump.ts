@@ -5,8 +5,7 @@ import type {
   GitOperationStrategy,
   PackageManagerStrategy,
   BumpResult,
-  ReferencePointResult,
-  DEPENDENCY_KEYS,
+  ReferencePointResult
 } from '../types/index.js';
 import { Package } from '../domain/package.js';
 import { DiscoveryService } from './discovery.js';
@@ -250,7 +249,7 @@ export class VersionBumpService {
     rootPkg: PackageJson,
     workspaceBumped: Record<string, BumpResult>,
     referencePoint: ReferencePointResult,
-    config: ActionConfiguration
+    _config: ActionConfiguration
   ) {
     if (!rootPkg.workspaces) {
       return { bumped: {}, hasBumped: false };

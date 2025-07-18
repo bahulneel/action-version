@@ -49,7 +49,7 @@ class PruneOldBranchesStrategy extends base_js_1.BaseBranchCleanupStrategy {
     constructor() {
         super('prune');
     }
-    async execute(branches, versionedBranch, templateRegex, rootBump) {
+    async execute(branches, versionedBranch, templateRegex, _rootBump) {
         core.info(`[root] Branch cleanup strategy: ${this.name} - removing old branches`);
         const cleanupPromises = branches.all
             .filter(branch => branch.replace('origin/', '') !== versionedBranch)

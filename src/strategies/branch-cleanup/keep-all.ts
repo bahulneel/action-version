@@ -12,10 +12,10 @@ export class KeepAllBranchesStrategy extends BaseBranchCleanupStrategy {
   }
 
   public async execute(
-    branches: GitBranches,
-    versionedBranch: string,
-    templateRegex: RegExp,
-    rootBump: BumpType
+    _branches: GitBranches,
+    _versionedBranch: string,
+    _templateRegex: RegExp,
+    _rootBump: BumpType
   ): Promise<void> {
     core.info(`[root] Branch cleanup strategy: ${this.name} - keeping all branches`);
     // Intentionally empty - keep all branches

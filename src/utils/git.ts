@@ -52,7 +52,7 @@ export async function setupGit(shouldCreateBranch: boolean, branchTemplate: stri
 export async function getCommitsAffecting(dir: string, sinceRef: string): Promise<CommitInfo[]> {
   const range = sinceRef ? `${sinceRef}..HEAD` : 'HEAD';
   const log = await git.log([range, '--', dir]);
-  const commits = parseCommits(log.all, sinceRef);
+  const commits = parseCommits([...log.all], sinceRef);
   
   const relativePath = path.relative(process.cwd(), dir) || '/';
   core.info(`[${relativePath}] ${commits.length} commits affecting since ${sinceRef}`);

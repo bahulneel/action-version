@@ -26,17 +26,33 @@ export class ConfigurationService {
    * Parse raw inputs from GitHub Actions.
    */
   private parseRawInputs(): Partial<ActionConfiguration> {
-    return {
-      commitMsgTemplate: core.getInput('commit_template') || undefined,
-      depCommitMsgTemplate: core.getInput('dependency_commit_template') || undefined,
+    const result: any = {
       shouldCreateBranch: this.safeGetBooleanInput('create_branch', false),
-      branchTemplate: core.getInput('branch_template') || undefined,
-      branchCleanup: core.getInput('branch_cleanup') as any || undefined,
-      baseBranch: core.getInput('base') || undefined,
-      strategy: core.getInput('strategy') as any || undefined,
-      activeBranch: core.getInput('branch') || undefined,
       tagPrereleases: this.safeGetBooleanInput('tag_prereleases', false),
     };
+
+    const commitTemplate = core.getInput('commit_template');
+    if (commitTemplate) result.commitMsgTemplate = commitTemplate;
+
+    const depCommitTemplate = core.getInput('dependency_commit_template');
+    if (depCommitTemplate) result.depCommitMsgTemplate = depCommitTemplate;
+
+    const branchTemplate = core.getInput('branch_template');
+    if (branchTemplate) result.branchTemplate = branchTemplate;
+
+    const branchCleanup = core.getInput('branch_cleanup');
+    if (branchCleanup) result.branchCleanup = branchCleanup as any;
+
+    const baseBranch = core.getInput('base');
+    if (baseBranch) result.baseBranch = baseBranch;
+
+    const strategy = core.getInput('strategy');
+    if (strategy) result.strategy = strategy as any;
+
+    const activeBranch = core.getInput('branch');
+    if (activeBranch) result.activeBranch = activeBranch;
+
+    return result;
   }
 
   /**

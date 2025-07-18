@@ -136,7 +136,7 @@ class DiscoveryService {
             });
             // Find first non-merge commit
             for (const commit of log.all) {
-                if (!commit.message.startsWith('Merge ') && commit.parents.length <= 1) {
+                if (!commit.message.startsWith('Merge ')) {
                     return commit.hash;
                 }
             }
