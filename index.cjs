@@ -522,6 +522,13 @@ async function parseConfiguration() {
   core.info(`[config] Strategy: ${strategy}`)
   core.info(`[config] Active branch: ${activeBranch}`)
   core.info(`[config] Tag prereleases: ${tagPrereleases}`)
+  core.info(`[config] Commit message template: ${commitMsgTemplate}`)
+  core.info(`[config] Dependency commit message template: ${depCommitMsgTemplate}`)
+  core.info(`[config] Should create branch: ${shouldCreateBranch}`)
+  core.info(`[config] Branch template: ${branchTemplate}`)
+  core.info(`[config] Branch cleanup: ${branchCleanup}`)
+  core.info(`[config] Base branch: ${baseBranch}`)
+  core.info(`[config] Strategy: ${strategy}`)
 
   return {
     commitMsgTemplate,
