@@ -199,97 +199,11 @@ class BranchCleanupStrategyFactory {
   }
 }
 
-// Strategy Pattern: Reference Point Determination Strategies
-class ReferencePointStrategy {
-  constructor(name) {
-    this.name = name
-  }
-
-  /**
-   * @param {*} _baseBranch
-   * @param {*} _activeBranch
-   * @returns {Promise<{ referenceCommit: string, referenceVersion: string, shouldFinalizeVersions: boolean }>}
-   */
-  async execute(_baseBranch, _activeBranch) {
-    throw new Error('Strategy must implement execute method')
-  }
-}
-
-class TagBasedReferenceStrategy extends ReferencePointStrategy {
-  constructor() {
-    super('tag-based')
-  }
-
-  async execute(_baseBranch, _activeBranch) {
-    core.info(`[root] Using latest tag as reference`)
-    const tags = await git.tags(['--sort=-v:refname'])
-    const latestTag = tags.latest
-
-    if (latestTag) {
-      const referenceCommit = await git.revparse([latestTag])
-      const referenceVersion = String(semver.coerce(latestTag.replace(/^v/, '')) || '0.0.0')
-      return { referenceCommit, referenceVersion, shouldFinalizeVersions: false }
-    }
-    else {
-      // No tags, use first commit
-      const firstCommit = await git.log(['--reverse', '--max-count=1'])
-      if (!firstCommit.latest) throw new Error('No commits found in repository')
-      const referenceCommit = firstCommit.latest.hash
-      const referenceVersion = '0.0.0'
-      return { referenceCommit, referenceVersion, shouldFinalizeVersions: false }
-    }
-  }
-}
-
-class BranchBasedReferenceStrategy extends ReferencePointStrategy {
-  constructor() {
-    super('branch-based')
-  }
-
-  async execute(baseBranch, activeBranch) {
-    core.info(`[root] Using branch base: ${baseBranch}`)
-    const branch = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`
-    let referenceCommit = await lastNonMergeCommit(git, branch)
-    referenceCommit = referenceCommit.trim()
-
-    // Get root package version at that commit
-    const rootPackageJsonPath = require('node:path').join(require('node:process').cwd(), 'package.json')
-    let referenceVersion = await getVersionAtCommit(referenceCommit)
-    referenceVersion = String(semver.coerce(referenceVersion) || '0.0.0')
-
-    // Check if we should finalize prerelease versions (base branch update scenario)
-    let shouldFinalizeVersions = false
-    if (baseBranch && activeBranch) {
-      try {
-        const activeCommit = await lastNonMergeCommit(git, `origin/${activeBranch}`)
-        const baseCommit = await lastNonMergeCommit(git, `origin/${baseBranch}`)
-
-        if (activeCommit === baseCommit) {
-          core.info(`[root] Active and base branches are at same commit - checking for prerelease finalization`)
-          shouldFinalizeVersions = true
-        }
-      }
-      catch (_error) {
-        core.debug(`Could not compare active/base branches: ${_error.message}`)
-      }
-    }
-
-    return { referenceCommit, referenceVersion, shouldFinalizeVersions }
-  }
-}
-
-class ReferencePointStrategyFactory {
-  static getStrategy(baseBranch) {
-    if (baseBranch) {
-      return new BranchBasedReferenceStrategy()
-    }
-    else {
-      return new TagBasedReferenceStrategy()
-    }
-  }
-}
+// Discovery Strategy Pattern - handles all git discovery operations
+// This replaces the old ReferencePointStrategy pattern with a cleaner approach
 
 const { GitOperationStrategyFactory } = require('./lib/git-operations/factory.cjs')
+const { DiscoveryStrategyFactory } = require('./lib/git-operations/discovery-factory.cjs')
 // Strategy Pattern: Import from lib folder
 const { PackageManagerFactory } = require('./lib/package-managers/factory.cjs')
 
@@ -326,7 +240,8 @@ class Package {
   }
 
   async getLastVersionChangeCommit() {
-    return await _getLastVersionChangeCommit(this.packageJsonPath)
+    const discoveryStrategy = DiscoveryStrategyFactory.getStrategy()
+    return await discoveryStrategy.findLastVersionChangeCommit(this.packageJsonPath)
   }
 
   async getCommitsAffecting(sinceRef) {
@@ -334,20 +249,18 @@ class Package {
   }
 
   async getVersionAtCommit(commitRef) {
-    return await getVersionAtCommit(commitRef)
+    const discoveryStrategy = DiscoveryStrategyFactory.getStrategy()
+    return await discoveryStrategy.getVersionAtCommit(commitRef)
   }
 
-  async processVersionBump(referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy) {
+  async processVersionBump(referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy, shouldForceBump = false) {
     this.initializeVersion()
 
     core.info(`[${this.name}@${this.version}] Processing package`)
 
-    // Step 2a: Detect when version was last changed
-    const lastVersionCommit = await this.getLastVersionChangeCommit()
-
-    // Step 2b: Find changes since last version change
-    const commitsSinceVersion = await this.getCommitsAffecting(lastVersionCommit)
-    const commitBasedBump = commitsSinceVersion.length > 0 ? getMostSignificantBump(commitsSinceVersion) : null
+    // Step 2a: Find changes since reference point (tag or branch)
+    const commitsSinceReference = await this.getCommitsAffecting(referenceCommit)
+    const commitBasedBump = commitsSinceReference.length > 0 ? getMostSignificantBump(commitsSinceReference) : null
 
     // Step 2c: Calculate historical bump type from reference
     const historicalVersion = await this.getVersionAtCommit(referenceCommit) || referenceVersion
@@ -365,6 +278,17 @@ class Package {
         core.info(`[${this.name}@${this.version}] Skipping - strategy '${strategy}' with no changes needed`)
         return null
       }
+    }
+    // Step 2d.5: Force bump if requested and changes exist
+    else if (shouldForceBump && commitBasedBump) {
+      core.info(`[${this.name}@${this.version}] Force bump requested with changes, applying bump: ${commitBasedBump}`)
+
+      const nextVersion = getNextVersion(this.version, commitBasedBump, historicalBump, 'apply-bump')
+
+      if (nextVersion === this.version) {
+        core.info(`[${this.name}@${this.version}] Skipping - no version change needed`)
+        return null
+      }
 
       this.version = nextVersion
       await this.save()
@@ -377,7 +301,7 @@ class Package {
       const result = {
         version: this.version,
         bumpType,
-        sha: lastVersionCommit,
+        sha: referenceCommit,
       }
 
       if (semver.prerelease(this.version)) {
@@ -403,7 +327,7 @@ class Package {
       const result = {
         version: this.version,
         bumpType: commitBasedBump,
-        sha: lastVersionCommit,
+        sha: referenceCommit,
       }
 
       core.info(`[${this.name}@${this.version}] Bumped to ${this.version} (${commitBasedBump})`)
@@ -580,20 +504,20 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
 }
 
 async function determineReferencePoint(baseBranch, activeBranch) {
-  const strategy = ReferencePointStrategyFactory.getStrategy(baseBranch)
-  const result = await strategy.execute(baseBranch, activeBranch)
+  const discoveryStrategy = DiscoveryStrategyFactory.getStrategy(baseBranch)
+  const result = await discoveryStrategy.findReferencePoint(baseBranch, activeBranch)
 
   core.info(`[root] Reference: ${result.referenceCommit} (version: ${result.referenceVersion})`)
 
   return result
 }
 
-async function processWorkspacePackages(packages, referenceCommit, referenceVersion, strategy, commitMsgTemplate, depCommitMsgTemplate, gitStrategy, packageManager) {
+async function processWorkspacePackages(packages, referenceCommit, referenceVersion, strategy, commitMsgTemplate, depCommitMsgTemplate, gitStrategy, packageManager, shouldForceBump = false) {
   const bumped = {}
   const testFailures = []
 
   for (const pkg of packages) {
-    const result = await pkg.processVersionBump(referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy)
+    const result = await pkg.processVersionBump(referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy, shouldForceBump)
     if (result) {
       bumped[pkg.name] = result
     }
@@ -676,7 +600,7 @@ async function finalizePackageVersions(packages, rootPkg, commitMsgTemplate, git
   return { bumped, hasBumped }
 }
 
-async function processRootPackage(rootPkg, bumped, referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy) {
+async function processRootPackage(rootPkg, bumped, referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy, shouldForceBump = false) {
   if (!rootPkg.workspaces) {
     return { bumped, hasBumped: false }
   }
@@ -699,7 +623,8 @@ async function processRootPackage(rootPkg, bumped, referenceCommit, referenceVer
 
   // Step 2: Calculate historical bump type from reference
   const rootPackageJsonPath = path.join(process.cwd(), 'package.json')
-  const rootHistoricalVersion = await getVersionAtCommit(referenceCommit) || referenceVersion
+  const discoveryStrategy = DiscoveryStrategyFactory.getStrategy()
+  const rootHistoricalVersion = await discoveryStrategy.getVersionAtCommit(referenceCommit) || referenceVersion
   const rootHistoricalBump = calculateBumpType(rootHistoricalVersion, rootPkg.version)
 
   core.info(`[root@${rootPkg.version}] Required bump: ${workspaceBump}, Historical bump: ${rootHistoricalBump || 'none'}`)
@@ -756,10 +681,35 @@ async function processRootPackage(rootPkg, bumped, referenceCommit, referenceVer
     core.info(`[root] Root was bumped in workspace processing`)
   }
 
+  // Step 5: Force bump if requested and no workspace bumps occurred
+  if (shouldForceBump && !workspaceBump && Object.keys(bumped).length === 0) {
+    core.info(`[root@${rootPkg.version}] Force bump requested but no changes detected in workspaces`)
+    // Check if there are any commits since the reference
+    const commitsSinceReference = await getCommitsAffecting(process.cwd(), referenceCommit)
+    if (commitsSinceReference.length > 0) {
+      const forceBumpType = getMostSignificantBump(commitsSinceReference)
+      core.info(`[root@${rootPkg.version}] Force bumping root package with ${forceBumpType} due to ${commitsSinceReference.length} commits`)
+
+      const nextVersion = getNextVersion(rootPkg.version, forceBumpType, null, 'apply-bump')
+      if (nextVersion !== rootPkg.version) {
+        rootPkg.version = nextVersion
+        await writeJSON(rootPackageJsonPath, rootPkg)
+
+        // Use git strategy to commit the root version change
+        await gitStrategy.commitVersionChange(process.cwd(), rootPkg.name || 'root', rootPkg.version, forceBumpType, commitMsgTemplate)
+
+        bumped[rootPkg.name] = { version: rootPkg.version, bumpType: forceBumpType, sha: null }
+        hasBumped = true
+
+        core.info(`[root@${rootPkg.version}] Force bumped to ${rootPkg.version} (${forceBumpType})`)
+      }
+    }
+  }
+
   return { bumped, hasBumped }
 }
 
-async function generateSummary(bumped, testFailures, strategy, activeBranch, baseBranch, tagPrereleases, shouldFinalizeVersions) {
+async function generateSummary(bumped, testFailures, strategy, activeBranch, baseBranch, tagPrereleases, shouldFinalizeVersions, shouldForceBump = false) {
   const totalPackages = Object.keys(bumped).length
   const prereleasePackages = Object.values(bumped).filter(b => semver.prerelease(b.version)).length
   const releasePackages = totalPackages - prereleasePackages
@@ -791,6 +741,7 @@ async function generateSummary(bumped, testFailures, strategy, activeBranch, bas
     `Base branch: ${baseBranch || 'N/A'}`,
     `Tag prereleases: ${tagPrereleases}`,
     `Should finalize versions: ${shouldFinalizeVersions}`,
+    `Should force bump: ${shouldForceBump}`,
   ])
 
   // Add statistics
@@ -1048,21 +999,7 @@ function deleteRemoteBranch(branch) {
   catch { }
 }
 
-async function lastNonMergeCommit(git, branch) {
-  try {
-    core.debug(`Getting last non-merge commit from branch: ${branch}`)
-    const commits = await git.log(['--no-merges', '-n1', branch])
-    if (!commits.latest) {
-      throw new Error(`No commits found in branch ${branch}`)
-    }
-    core.debug(`Last non-merge commit in ${branch}: ${commits.latest.hash}`)
-    return commits.latest.hash
-  }
-  catch (error) {
-    core.error(`Failed to get last non-merge commit from ${branch}: ${error.message}`)
-    throw new Error(`Failed to get last non-merge commit from ${branch}: ${error.message}`)
-  }
-}
+// lastNonMergeCommit is now handled by BranchDiscoveryStrategy
 
 async function main() {
   let exitCode = 0
@@ -1088,7 +1025,7 @@ async function main() {
     core.info(`[config] Git strategy: ${gitStrategy.name}`)
 
     // Step 4: Determine reference point for version comparison
-    const { referenceCommit, referenceVersion, shouldFinalizeVersions }
+    const { referenceCommit, referenceVersion, shouldFinalizeVersions, shouldForceBump }
       = await determineReferencePoint(baseBranch, activeBranch)
 
     // Step 5: Discover packages and build dependency graph
@@ -1123,20 +1060,21 @@ async function main() {
         depCommitMsgTemplate,
         gitStrategy,
         packageManager,
+        shouldForceBump,
       )
       bumped = workspaceResult.bumped
       testFailures = workspaceResult.testFailures
       hasBumped = hasBumped || Object.keys(bumped).length > 0
 
       // Step 6b: Process root package
-      const rootResult = await processRootPackage(rootPkg, bumped, referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy)
+      const rootResult = await processRootPackage(rootPkg, bumped, referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy, shouldForceBump)
       bumped = rootResult.bumped
       if (rootResult.hasBumped)
         hasBumped = true
     }
 
     // Step 7: Generate comprehensive summary and outputs
-    await generateSummary(bumped, testFailures, strategy, activeBranch, baseBranch, tagPrereleases, shouldFinalizeVersions)
+    await generateSummary(bumped, testFailures, strategy, activeBranch, baseBranch, tagPrereleases, shouldFinalizeVersions, shouldForceBump)
 
     // Step 8: Handle branch operations and cleanup
     outputBranch = await handleBranchOperations(newBranch, hasBumped, rootPkg, branchTemplate, branchCleanup, templateRegex, tagPrereleases, gitStrategy)
@@ -1207,15 +1145,6 @@ function guessBumpType(version) {
   return 'patch'
 }
 
-// Add a stub for getVersionAtCommit to fix no-undef error
-async function getVersionAtCommit(commitRef) {
-  // TODO: Implement or replace with actual logic
-  return '0.0.0'
-}
-
-async function _getLastVersionChangeCommit(packageJsonPath) {
-  // TODO: Implement or replace with actual logic
-  return 'HEAD'
-}
+// Discovery functions are now handled by strategies in lib/git-operations/
 
 main()
