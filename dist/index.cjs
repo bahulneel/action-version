@@ -362,9 +362,14 @@ class VersionBumpApplication {
             // Step 6: Execute version bump process
             const results = await versionBumpService.processWorkspace(packages, rootPkg, config);
             this.hasBumped = results.hasBumped;
-            // Step 7: Generate comprehensive summary
+            // Step 7: Create tag for root package if version bumps occurred and we're not branching
+            if (this.hasBumped && !config.shouldCreateBranch) {
+                const isPrerelease = rootPkg.version.includes('-');
+                await gitStrategy.tagVersion(rootPkg.version, isPrerelease, config.tagPrereleases || !isPrerelease);
+            }
+            // Step 8: Generate comprehensive summary
             await summaryService.generateSummary(results, config);
-            // Step 8: Handle success
+            // Step 9: Handle success
             if (this.hasBumped) {
                 core.info('✅ Version bump action completed successfully with changes');
                 core.notice(`Version bump completed: ${results.totalPackages} packages updated`);
