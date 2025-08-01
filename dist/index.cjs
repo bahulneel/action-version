@@ -364,8 +364,11 @@ class VersionBumpApplication {
             this.hasBumped = results.hasBumped;
             // Step 7: Create tag for root package if version bumps occurred and we're not branching
             if (this.hasBumped && !config.shouldCreateBranch) {
-                const isPrerelease = rootPkg.version.includes('-');
-                await gitStrategy.tagVersion(rootPkg.version, isPrerelease, config.tagPrereleases || !isPrerelease);
+                // Get the bumped version from results or use current root version
+                const rootPackageName = rootPkg.name || 'root';
+                const bumpedVersion = results.bumped[rootPackageName]?.version || rootPkg.version;
+                const isPrerelease = bumpedVersion.includes('-');
+                await gitStrategy.tagVersion(bumpedVersion, isPrerelease, config.tagPrereleases || !isPrerelease);
             }
             // Step 8: Generate comprehensive summary
             await summaryService.generateSummary(results, config);
