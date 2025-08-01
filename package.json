@@ -16,7 +16,8 @@
     "lint:fix": "eslint src/**/*.ts --fix",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "self": "node dist/index.cjs"
+    "self": "node dist/index.cjs",
+    "dev-build": "npm run build && git add dist/ && git commit -m 'chore: update dist files' || echo 'No changes to commit'"
   },
   "dependencies": {
     "@actions/core": "^1.11.1",
