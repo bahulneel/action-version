@@ -430,6 +430,20 @@ class VersionBumpApplication {
         }
         else {
             core.info('📝 No changes to push');
+            // Push tags even when no commits were made (when not creating branches)
+            if (!this.outputBranch) {
+                try {
+                    const simpleGit = (await Promise.resolve().then(() => __importStar(__nccwpck_require__(9065)))).default;
+                    const git = simpleGit();
+                    core.info(`[git] Pushing tags only`);
+                    await git.pushTags();
+                    core.info(`[git] Successfully pushed tags`);
+                }
+                catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    core.warning(`Failed to push tags: ${errorMessage}`);
+                }
+            }
         }
         // Write summary to GitHub Actions (only if in GitHub Actions environment)
         if (process.env.GITHUB_STEP_SUMMARY) {
