@@ -27,6 +27,10 @@ declare class VersionBumpApplication {
      * Set GitHub Actions outputs based on results.
      */
     private setActionOutputs;
+    /**
+     * Determine if we should create a tag for the current version.
+     */
+    private shouldCreateTag;
 }
 /**
  * Application entry point.
