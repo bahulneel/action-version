@@ -2363,7 +2363,7 @@ class ConsoleSummaryStrategy extends base_js_1.BaseSummaryStrategy {
             recommendations.push('Review test failures and consider pinning dependency versions for compatibility');
         }
         // Branch management recommendations
-        if (config.branchCleanup === 'keep' && results.totalPackages > 0) {
+        if (config.branchCleanup === 'keep' && results.totalPackages > 0 && config.shouldCreateBranch) {
             recommendations.push('Consider using `prune` or `semantic` branch cleanup to keep workspace clean');
         }
         if (recommendations.length > 0) {
@@ -2577,7 +2577,7 @@ class GitHubActionsSummaryStrategy extends base_js_1.BaseSummaryStrategy {
             recommendations.push('Review test failures and consider pinning dependency versions for compatibility');
         }
         // Branch management recommendations
-        if (config.branchCleanup === 'keep' && results.totalPackages > 0) {
+        if (config.branchCleanup === 'keep' && results.totalPackages > 0 && config.shouldCreateBranch) {
             recommendations.push('Consider using `prune` or `semantic` branch cleanup to keep workspace clean');
         }
         if (recommendations.length > 0) {
