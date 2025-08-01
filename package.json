@@ -1,6 +1,6 @@
 {
   "name": "action-version",
-  "version": "0.30.0",
+  "version": "0.31.0",
   "description": "GitHub Action for automated version bumping and dependency management in monorepos using Conventional Commits.",
   "license": "MIT",
   "main": "dist/index.cjs",
@@ -29,7 +29,7 @@
   "devDependencies": {
     "@antfu/eslint-config": "^4.17.0",
     "@types/conventional-commits-parser": "^5.0.0",
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.19.9",
     "@types/semver": "^7.5.0",
     "@vercel/ncc": "^0.38.0",
     "eslint": "^9.31.0",
