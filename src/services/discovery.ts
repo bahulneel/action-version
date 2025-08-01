@@ -37,9 +37,9 @@ export class DiscoveryService {
       const currentBranch = await this.getCurrentBranch()
       const shouldFinalizeVersions = currentBranch === baseBranch
 
-      // Find last non-merge commit on base branch
-      const branch = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`
-      const referenceCommit = await this.findLastNonMergeCommit(branch)
+      // Find the merge base (last common ancestor) between current branch and base branch
+      const mergeBase = await git.raw(['merge-base', currentBranch, baseBranch])
+      const referenceCommit = mergeBase.trim()
 
       // Get version at that commit
       const referenceVersion = (await this.getVersionAtCommit(referenceCommit)) || '0.0.0'
