@@ -35,6 +35,8 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VersionBumpService = void 0;
 const core = __importStar(require("@actions/core"));
+const path = __importStar(require("path"));
+const fs_1 = require("fs");
 const discovery_js_1 = require("./discovery.js");
 const version_js_1 = require("../utils/version.js");
 const version_js_2 = require("../utils/version.js");
@@ -225,8 +227,9 @@ class VersionBumpService {
         try {
             const simpleGit = (await Promise.resolve().then(() => __importStar(require('simple-git')))).default;
             const git = simpleGit();
-            // Get all commits since reference
-            const log = await git.log([`${referenceCommit}..HEAD`]);
+            // If no reference commit, get all commits
+            const logArgs = referenceCommit ? [`${referenceCommit}..HEAD`] : ['--all'];
+            const log = await git.log(logArgs);
             // Parse commits to get bump types
             const { parseCommits, getMostSignificantBump } = await Promise.resolve().then(() => __importStar(require('../utils/commits.js')));
             const commits = parseCommits([...log.all], referenceCommit);
@@ -260,12 +263,41 @@ class VersionBumpService {
         }
     }
     /**
-     * Get workspace directories.
+     * Get workspace directories from the root package.json workspaces configuration.
      */
     async getWorkspaceDirectories() {
-        // This would need to be implemented based on the workspace configuration
-        // For now, return common workspace patterns
-        return ['packages/', 'src/', 'lib/', 'components/'];
+        try {
+            const rootPkgPath = path.join(process.cwd(), 'package.json');
+            const rootPkg = JSON.parse(await fs_1.promises.readFile(rootPkgPath, 'utf-8'));
+            if (!rootPkg.workspaces) {
+                return [];
+            }
+            // Handle both array and object format
+            const workspaces = Array.isArray(rootPkg.workspaces)
+                ? rootPkg.workspaces
+                : rootPkg.workspaces.packages || [];
+            // Convert glob patterns to directory prefixes
+            const directories = [];
+            for (const pattern of workspaces) {
+                // Convert patterns like "packages/*" to "packages/"
+                if (pattern.includes('*')) {
+                    const dir = pattern.split('*')[0];
+                    if (dir) {
+                        directories.push(dir);
+                    }
+                }
+                else {
+                    // Direct directory reference
+                    directories.push(pattern.endsWith('/') ? pattern : `${pattern}/`);
+                }
+            }
+            return directories;
+        }
+        catch (error) {
+            core.warning(`Failed to get workspace directories: ${error}`);
+            // Fallback to common patterns
+            return ['packages/', 'apps/', 'libs/', 'src/', 'implementations/'];
+        }
     }
     /**
      * Calculate statistics from bump results.

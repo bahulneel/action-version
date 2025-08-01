@@ -47,7 +47,7 @@ export declare class VersionBumpService {
      */
     private getNonWorkspaceCommits;
     /**
-     * Get workspace directories.
+     * Get workspace directories from the root package.json workspaces configuration.
      */
     private getWorkspaceDirectories;
     /**

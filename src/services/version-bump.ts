@@ -1,4 +1,6 @@
 import * as core from '@actions/core'
+import * as path from 'path'
+import { promises as fs } from 'fs'
 import type {
   ActionConfiguration,
   PackageJson,
@@ -319,8 +321,9 @@ export class VersionBumpService {
       const simpleGit = (await import('simple-git')).default
       const git = simpleGit()
 
-      // Get all commits since reference
-      const log = await git.log([`${referenceCommit}..HEAD`])
+      // If no reference commit, get all commits
+      const logArgs = referenceCommit ? [`${referenceCommit}..HEAD`] : ['--all']
+      const log = await git.log(logArgs)
 
       // Parse commits to get bump types
       const { parseCommits, getMostSignificantBump } = await import('../utils/commits.js')
@@ -358,12 +361,43 @@ export class VersionBumpService {
   }
 
   /**
-   * Get workspace directories.
+   * Get workspace directories from the root package.json workspaces configuration.
    */
   private async getWorkspaceDirectories(): Promise<string[]> {
-    // This would need to be implemented based on the workspace configuration
-    // For now, return common workspace patterns
-    return ['packages/', 'src/', 'lib/', 'components/']
+    try {
+      const rootPkgPath = path.join(process.cwd(), 'package.json')
+      const rootPkg = JSON.parse(await fs.readFile(rootPkgPath, 'utf-8'))
+
+      if (!rootPkg.workspaces) {
+        return []
+      }
+
+      // Handle both array and object format
+      const workspaces = Array.isArray(rootPkg.workspaces)
+        ? rootPkg.workspaces
+        : rootPkg.workspaces.packages || []
+
+      // Convert glob patterns to directory prefixes
+      const directories: string[] = []
+      for (const pattern of workspaces) {
+        // Convert patterns like "packages/*" to "packages/"
+        if (pattern.includes('*')) {
+          const dir = pattern.split('*')[0]
+          if (dir) {
+            directories.push(dir)
+          }
+        } else {
+          // Direct directory reference
+          directories.push(pattern.endsWith('/') ? pattern : `${pattern}/`)
+        }
+      }
+
+      return directories
+    } catch (error) {
+      core.warning(`Failed to get workspace directories: ${error}`)
+      // Fallback to common patterns
+      return ['packages/', 'apps/', 'libs/', 'src/', 'implementations/']
+    }
   }
 
   /**

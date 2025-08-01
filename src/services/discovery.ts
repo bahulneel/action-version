@@ -39,8 +39,22 @@ export class DiscoveryService {
 
       // Find the merge base (last common ancestor) between current branch and base branch
       const remoteBaseBranch = baseBranch.includes('/') ? baseBranch : `origin/${baseBranch}`
+
+      // Ensure we have the remote branch
+      try {
+        await git.fetch('origin', baseBranch.replace('origin/', ''))
+      } catch (fetchError) {
+        core.warning(`Failed to fetch ${baseBranch}: ${fetchError}`)
+      }
+
       const mergeBase = await git.raw(['merge-base', currentBranch, remoteBaseBranch])
       const referenceCommit = mergeBase.trim()
+
+      if (!referenceCommit) {
+        throw new Error(
+          `Failed to find merge base between ${currentBranch} and ${remoteBaseBranch}`
+        )
+      }
 
       // Get version at that commit
       const referenceVersion = (await this.getVersionAtCommit(referenceCommit)) || '0.0.0'
@@ -48,7 +62,7 @@ export class DiscoveryService {
       // Check if we should force bump based on branch state
       const shouldForceBump = !shouldFinalizeVersions && activeBranch !== baseBranch
 
-      core.debug(
+      core.info(
         `Branch reference: commit=${referenceCommit}, version=${referenceVersion}, finalize=${shouldFinalizeVersions}`
       )
 
@@ -82,12 +96,16 @@ export class DiscoveryService {
         const referenceCommit = await git.revparse([latestTag])
         const referenceVersion = latestTag.replace(/^v/, '') // Remove 'v' prefix if present
 
-        core.debug(
-          `Tag reference: tag=${latestTag}, commit=${referenceCommit}, version=${referenceVersion}`
+        if (!referenceCommit || !referenceCommit.trim()) {
+          throw new Error(`Failed to resolve commit for tag ${latestTag}`)
+        }
+
+        core.info(
+          `Tag reference: tag=${latestTag}, commit=${referenceCommit.trim()}, version=${referenceVersion}`
         )
 
         return {
-          referenceCommit,
+          referenceCommit: referenceCommit.trim(),
           referenceVersion,
           shouldFinalizeVersions: false,
           shouldForceBump: false,

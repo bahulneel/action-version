@@ -739,13 +739,23 @@ class DiscoveryService {
             const shouldFinalizeVersions = currentBranch === baseBranch;
             // Find the merge base (last common ancestor) between current branch and base branch
             const remoteBaseBranch = baseBranch.includes('/') ? baseBranch : `origin/${baseBranch}`;
+            // Ensure we have the remote branch
+            try {
+                await git.fetch('origin', baseBranch.replace('origin/', ''));
+            }
+            catch (fetchError) {
+                core.warning(`Failed to fetch ${baseBranch}: ${fetchError}`);
+            }
             const mergeBase = await git.raw(['merge-base', currentBranch, remoteBaseBranch]);
             const referenceCommit = mergeBase.trim();
+            if (!referenceCommit) {
+                throw new Error(`Failed to find merge base between ${currentBranch} and ${remoteBaseBranch}`);
+            }
             // Get version at that commit
             const referenceVersion = (await this.getVersionAtCommit(referenceCommit)) || '0.0.0';
             // Check if we should force bump based on branch state
             const shouldForceBump = !shouldFinalizeVersions && activeBranch !== baseBranch;
-            core.debug(`Branch reference: commit=${referenceCommit}, version=${referenceVersion}, finalize=${shouldFinalizeVersions}`);
+            core.info(`Branch reference: commit=${referenceCommit}, version=${referenceVersion}, finalize=${shouldFinalizeVersions}`);
             return {
                 referenceCommit,
                 referenceVersion,
@@ -772,9 +782,12 @@ class DiscoveryService {
             if (latestTag) {
                 const referenceCommit = await git.revparse([latestTag]);
                 const referenceVersion = latestTag.replace(/^v/, ''); // Remove 'v' prefix if present
-                core.debug(`Tag reference: tag=${latestTag}, commit=${referenceCommit}, version=${referenceVersion}`);
+                if (!referenceCommit || !referenceCommit.trim()) {
+                    throw new Error(`Failed to resolve commit for tag ${latestTag}`);
+                }
+                core.info(`Tag reference: tag=${latestTag}, commit=${referenceCommit.trim()}, version=${referenceVersion}`);
                 return {
-                    referenceCommit,
+                    referenceCommit: referenceCommit.trim(),
                     referenceVersion,
                     shouldFinalizeVersions: false,
                     shouldForceBump: false,
@@ -1025,6 +1038,8 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.VersionBumpService = void 0;
 const core = __importStar(__nccwpck_require__(7484));
+const path = __importStar(__nccwpck_require__(6928));
+const fs_1 = __nccwpck_require__(9896);
 const discovery_js_1 = __nccwpck_require__(5000);
 const version_js_1 = __nccwpck_require__(611);
 const version_js_2 = __nccwpck_require__(611);
@@ -1215,8 +1230,9 @@ class VersionBumpService {
         try {
             const simpleGit = (await Promise.resolve().then(() => __importStar(__nccwpck_require__(9065)))).default;
             const git = simpleGit();
-            // Get all commits since reference
-            const log = await git.log([`${referenceCommit}..HEAD`]);
+            // If no reference commit, get all commits
+            const logArgs = referenceCommit ? [`${referenceCommit}..HEAD`] : ['--all'];
+            const log = await git.log(logArgs);
             // Parse commits to get bump types
             const { parseCommits, getMostSignificantBump } = await Promise.resolve().then(() => __importStar(__nccwpck_require__(2365)));
             const commits = parseCommits([...log.all], referenceCommit);
@@ -1250,12 +1266,41 @@ class VersionBumpService {
         }
     }
     /**
-     * Get workspace directories.
+     * Get workspace directories from the root package.json workspaces configuration.
      */
     async getWorkspaceDirectories() {
-        // This would need to be implemented based on the workspace configuration
-        // For now, return common workspace patterns
-        return ['packages/', 'src/', 'lib/', 'components/'];
+        try {
+            const rootPkgPath = path.join(process.cwd(), 'package.json');
+            const rootPkg = JSON.parse(await fs_1.promises.readFile(rootPkgPath, 'utf-8'));
+            if (!rootPkg.workspaces) {
+                return [];
+            }
+            // Handle both array and object format
+            const workspaces = Array.isArray(rootPkg.workspaces)
+                ? rootPkg.workspaces
+                : rootPkg.workspaces.packages || [];
+            // Convert glob patterns to directory prefixes
+            const directories = [];
+            for (const pattern of workspaces) {
+                // Convert patterns like "packages/*" to "packages/"
+                if (pattern.includes('*')) {
+                    const dir = pattern.split('*')[0];
+                    if (dir) {
+                        directories.push(dir);
+                    }
+                }
+                else {
+                    // Direct directory reference
+                    directories.push(pattern.endsWith('/') ? pattern : `${pattern}/`);
+                }
+            }
+            return directories;
+        }
+        catch (error) {
+            core.warning(`Failed to get workspace directories: ${error}`);
+            // Fallback to common patterns
+            return ['packages/', 'apps/', 'libs/', 'src/', 'implementations/'];
+        }
     }
     /**
      * Calculate statistics from bump results.
