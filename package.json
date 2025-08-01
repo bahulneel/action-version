@@ -8,9 +8,9 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "build": "tsc && ncc build dist/index.js -s -o dist --source-map && mv dist/index.js dist/index.cjs && sed -i '' 's/sourceMappingURL=index.js.map/sourceMappingURL=index.cjs.map/' dist/index.cjs && mv dist/index.js.map dist/index.cjs.map",
+    "build": "tsc && ncc build dist/index.js -s -o dist --source-map && mv dist/index.js dist/index.cjs && sed -i 's/sourceMappingURL=index.js.map/sourceMappingURL=index.cjs.map/' dist/index.cjs && mv dist/index.js.map dist/index.cjs.map",
     "build:tsc": "tsc",
-    "build:ncc": "ncc build dist/index.js -s -o dist --source-map && mv dist/index.js dist/index.cjs && sed -i '' 's/sourceMappingURL=index.js.map/sourceMappingURL=index.cjs.map/' dist/index.cjs && mv dist/index.js.map dist/index.cjs.map",
+    "build:ncc": "ncc build dist/index.js -s -o dist --source-map && mv dist/index.js dist/index.cjs && sed -i 's/sourceMappingURL=index.js.map/sourceMappingURL=index.cjs.map/' dist/index.cjs && mv dist/index.js.map dist/index.cjs.map",
     "dev": "tsc --watch",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
