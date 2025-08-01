@@ -38,7 +38,8 @@ export class DiscoveryService {
       const shouldFinalizeVersions = currentBranch === baseBranch
 
       // Find the merge base (last common ancestor) between current branch and base branch
-      const mergeBase = await git.raw(['merge-base', currentBranch, baseBranch])
+      const remoteBaseBranch = baseBranch.includes('/') ? baseBranch : `origin/${baseBranch}`
+      const mergeBase = await git.raw(['merge-base', currentBranch, remoteBaseBranch])
       const referenceCommit = mergeBase.trim()
 
       // Get version at that commit
