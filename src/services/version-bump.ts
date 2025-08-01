@@ -12,7 +12,6 @@ import { DiscoveryService } from './discovery.js'
 import { calculateBumpType, finalizeVersion } from '../utils/version.js'
 import { getMostSignificantBumpType } from '../utils/version.js'
 import { VersionBumpStrategyFactory } from '../strategies/version-bump/factory.js'
-import { CommitInfo } from '../types/index.js'
 import { BumpType } from '../types/index.js'
 
 export interface VersionBumpResults {
