@@ -63,8 +63,10 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         core.warning(`[git] Failed to fetch from origin: ${errorMessage}`);
     }
-    const currentBranch = process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || 'main';
-    const newBranch = shouldCreateBranch ? interpolateBranchTemplate(branchTemplate, { version: currentBranch }) : undefined;
+    const currentBranch = process.env?.GITHUB_HEAD_REF || process.env?.GITHUB_REF_NAME || 'main';
+    const newBranch = shouldCreateBranch
+        ? interpolateBranchTemplate(branchTemplate, { version: currentBranch })
+        : undefined;
     try {
         if (newBranch) {
             core.info(`[git] Checking out ${newBranch} from ${currentBranch}`);

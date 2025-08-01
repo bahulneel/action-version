@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SummaryService = void 0;
 const core = __importStar(require("@actions/core"));
+const factory_js_1 = require("../strategies/summary/factory.js");
 /**
  * Service responsible for generating comprehensive summaries and reports.
  * Handles GitHub Actions summary creation and output generation.
@@ -44,58 +45,13 @@ class SummaryService {
      * Generate comprehensive summary for the version bump process.
      */
     async generateSummary(results, config) {
-        await this.generateActionsSummary(results, config);
+        // Get the appropriate summary strategy based on environment
+        const summaryStrategy = factory_js_1.SummaryStrategyFactory.getAppropriateStrategy();
+        // Generate summary using the strategy
+        await summaryStrategy.generateSummary(results, config);
+        // Generate additional outputs
         this.logResultsSummary(results, config);
         this.generateNotices(results, config);
-    }
-    /**
-     * Generate GitHub Actions summary with detailed tables.
-     */
-    async generateActionsSummary(results, config) {
-        core.summary.addHeading('📦 Version Bump Summary', 2);
-        if (results.totalPackages > 0) {
-            // Package changes table
-            core.summary.addTable([
-                [
-                    { data: 'Package', header: true },
-                    { data: 'Version', header: true },
-                    { data: 'Bump Type', header: true },
-                    { data: 'Previous Commit', header: true },
-                    { data: 'Status', header: true },
-                ],
-                ...Object.entries(results.bumped).map(([name, result]) => [
-                    { data: name },
-                    { data: result.version },
-                    { data: this.formatBumpType(result.bumpType) },
-                    { data: result.sha?.slice(0, 7) || 'N/A' },
-                    { data: results.testFailures.includes(name) ? '❌ Failed' : '✅ Success' },
-                ]),
-            ]);
-        }
-        else {
-            core.summary.addRaw('✨ No packages required version changes.');
-        }
-        // Configuration summary
-        core.summary.addHeading('⚙️ Configuration Used', 3);
-        core.summary.addList([
-            `**Strategy**: ${config.strategy}`,
-            `**Active Branch**: ${config.activeBranch}`,
-            `**Base Branch**: ${config.baseBranch || 'none (tag-based)'}`,
-            `**Tag Prereleases**: ${config.tagPrereleases ? 'enabled' : 'disabled'}`,
-            `**Create Branch**: ${config.shouldCreateBranch ? 'enabled' : 'disabled'}`,
-            `**Branch Cleanup**: ${config.branchCleanup}`,
-        ]);
-        // Statistics summary
-        core.summary.addHeading('📊 Statistics', 3);
-        core.summary.addList([
-            `**Total Packages Processed**: ${results.totalPackages}`,
-            `**Release Versions**: ${results.releasePackages}`,
-            `**Prerelease Versions**: ${results.prereleasePackages}`,
-            `**Finalized Versions**: ${results.finalizedPackages}`,
-            `**Test Failures**: ${results.testFailures.length}`,
-        ]);
-        // Add recommendations if any
-        this.addRecommendations(results, config);
     }
     /**
      * Log summary to console for debugging.
@@ -138,50 +94,6 @@ class SummaryService {
         }
         else {
             core.notice(`ℹ️ No version changes needed with strategy '${config.strategy}'`);
-        }
-    }
-    /**
-     * Add recommendations section to summary.
-     */
-    addRecommendations(results, config) {
-        const recommendations = [];
-        // Strategy recommendations
-        if (config.strategy === 'do-nothing' && results.totalPackages === 0) {
-            recommendations.push('Consider using `apply-bump` strategy if you want to apply version bumps');
-        }
-        if (config.strategy === 'pre-release' && !config.baseBranch) {
-            recommendations.push('Set a base branch to enable prerelease finalization');
-        }
-        // Test failure recommendations
-        if (results.testFailures.length > 0) {
-            recommendations.push('Review test failures and consider pinning dependency versions for compatibility');
-        }
-        // Branch management recommendations
-        if (config.branchCleanup === 'keep' && results.totalPackages > 0) {
-            recommendations.push('Consider using `prune` or `semantic` branch cleanup to keep workspace clean');
-        }
-        if (recommendations.length > 0) {
-            core.summary.addHeading('💡 Recommendations', 3);
-            core.summary.addList(recommendations);
-        }
-    }
-    /**
-     * Format bump type with emoji for better readability.
-     */
-    formatBumpType(bumpType) {
-        switch (bumpType) {
-            case 'major':
-                return '🔴 major';
-            case 'minor':
-                return '🟡 minor';
-            case 'patch':
-                return '🟢 patch';
-            case 'prerelease':
-                return '🧪 prerelease';
-            case 'release':
-                return '🚀 release';
-            default:
-                return bumpType;
         }
     }
 }

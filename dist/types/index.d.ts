@@ -3,6 +3,7 @@ export type StrategyName = 'do-nothing' | 'apply-bump' | 'pre-release';
 export type BranchCleanupStrategyType = 'keep' | 'prune' | 'semantic';
 export type GitOperationStrategyType = 'conventional' | 'simple';
 export type PackageManagerType = 'npm' | 'yarn' | 'pnpm';
+export type SummaryStrategyType = 'github-actions' | 'console';
 export interface ActionConfiguration {
     readonly commitMsgTemplate: string;
     readonly depCommitMsgTemplate: string;
@@ -78,6 +79,19 @@ export interface DiscoveryStrategy {
     findLastVersionChangeCommit(packageJsonPath: string): Promise<string | null>;
     getVersionAtCommit(commitRef: string): Promise<string | null>;
 }
+export interface VersionBumpResults {
+    bumped: Record<string, BumpResult>;
+    testFailures: string[];
+    totalPackages: number;
+    releasePackages: number;
+    prereleasePackages: number;
+    finalizedPackages: number;
+    hasBumped: boolean;
+}
+export interface SummaryStrategy {
+    readonly name: string;
+    generateSummary(results: VersionBumpResults, config: ActionConfiguration): Promise<void>;
+}
 export interface StrategyFactory<T> {
     getStrategy(name: string): T;
     getAvailableStrategies(): readonly string[];
@@ -111,7 +125,7 @@ export interface ValidationError extends Error {
     readonly value: unknown;
 }
 export declare const DEPENDENCY_KEYS: readonly ["dependencies", "devDependencies", "peerDependencies"];
-export type DependencyKey = typeof DEPENDENCY_KEYS[number];
+export type DependencyKey = (typeof DEPENDENCY_KEYS)[number];
 export declare function isBumpType(value: string): value is BumpType;
 export declare function isStrategyName(value: string): value is StrategyName;
 export declare function isBranchCleanupStrategy(value: string): value is BranchCleanupStrategyType;

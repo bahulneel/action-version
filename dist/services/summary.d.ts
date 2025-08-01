@@ -10,10 +10,6 @@ export declare class SummaryService {
      */
     generateSummary(results: VersionBumpResults, config: ActionConfiguration): Promise<void>;
     /**
-     * Generate GitHub Actions summary with detailed tables.
-     */
-    private generateActionsSummary;
-    /**
      * Log summary to console for debugging.
      */
     private logResultsSummary;
@@ -21,13 +17,5 @@ export declare class SummaryService {
      * Generate GitHub Actions notices based on results.
      */
     private generateNotices;
-    /**
-     * Add recommendations section to summary.
-     */
-    private addRecommendations;
-    /**
-     * Format bump type with emoji for better readability.
-     */
-    private formatBumpType;
 }
 //# sourceMappingURL=summary.d.ts.map

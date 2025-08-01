@@ -69,7 +69,7 @@ class DiscoveryService {
             const branch = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`;
             const referenceCommit = await this.findLastNonMergeCommit(branch);
             // Get version at that commit
-            const referenceVersion = await this.getVersionAtCommit(referenceCommit) || '0.0.0';
+            const referenceVersion = (await this.getVersionAtCommit(referenceCommit)) || '0.0.0';
             // Check if we should force bump based on branch state
             const shouldForceBump = !shouldFinalizeVersions && activeBranch !== baseBranch;
             core.debug(`Branch reference: commit=${referenceCommit}, version=${referenceVersion}, finalize=${shouldFinalizeVersions}`);
@@ -158,7 +158,7 @@ class DiscoveryService {
         }
         catch (error) {
             // Fallback to environment variables
-            return process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || 'main';
+            return process.env?.GITHUB_HEAD_REF || process.env?.GITHUB_REF_NAME || 'main';
         }
     }
     /**
