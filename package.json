@@ -1,6 +1,5 @@
 {
   "name": "action-version",
-  "type": "module",
   "version": "0.29.0",
   "description": "GitHub Action for automated version bumping and dependency management in monorepos using Conventional Commits.",
   "license": "MIT",
@@ -9,9 +8,14 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "build": "ncc build index.cjs -s -o dist",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
+    "build": "tsc && ncc build dist/index.js -s -o dist --source-map && mv dist/index.js dist/index.cjs",
+    "build:tsc": "tsc",
+    "build:ncc": "ncc build dist/index.js -s -o dist --source-map && mv dist/index.js dist/index.cjs",
+    "dev": "tsc --watch",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist",
     "self": "node dist/index.cjs"
   },
   "dependencies": {
@@ -24,7 +28,11 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "^4.17.0",
+    "@types/conventional-commits-parser": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "@types/semver": "^7.5.0",
     "@vercel/ncc": "^0.38.0",
-    "eslint": "^9.31.0"
+    "eslint": "^9.31.0",
+    "typescript": "^5.0.0"
   }
 }

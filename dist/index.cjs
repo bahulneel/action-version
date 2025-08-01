@@ -1,5 +1,3589 @@
-require('./sourcemap-register.cjs');/******/ (() => { // webpackBootstrap
+require('./sourcemap-register.js');/******/ (() => { // webpackBootstrap
 /******/ 	var __webpack_modules__ = ({
+
+/***/ 9138:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Package = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const promises_1 = __nccwpck_require__(1455);
+const node_path_1 = __importDefault(__nccwpck_require__(6760));
+const index_js_1 = __nccwpck_require__(1279);
+const version_js_1 = __nccwpck_require__(611);
+const versioning_js_1 = __nccwpck_require__(3771);
+const git_js_1 = __nccwpck_require__(6959);
+const commits_js_1 = __nccwpck_require__(2365);
+/**
+ * Represents a package in the workspace with its metadata and operations.
+ * Encapsulates package-specific version management logic.
+ */
+class Package {
+    name;
+    dir;
+    _pkg;
+    packageJsonPath;
+    _bumpResult = null;
+    constructor(name, dir, _pkg, packageJsonPath) {
+        this.name = name;
+        this.dir = dir;
+        this._pkg = _pkg;
+        this.packageJsonPath = packageJsonPath;
+    }
+    /**
+     * Get the current version of the package.
+     */
+    get version() {
+        return this._pkg.version;
+    }
+    /**
+     * Set the version of the package.
+     */
+    set version(newVersion) {
+        this._pkg.version = newVersion;
+    }
+    /**
+     * Get the package.json data.
+     */
+    get pkg() {
+        return this._pkg;
+    }
+    /**
+     * Get the relative path of the package directory.
+     */
+    get relativePath() {
+        return node_path_1.default.relative(process.cwd(), this.dir) || '/';
+    }
+    /**
+     * Get the bump result if a version bump has occurred.
+     */
+    get bumpResult() {
+        return this._bumpResult;
+    }
+    /**
+     * Initialize the version if it's missing or invalid.
+     */
+    initializeVersion() {
+        if (!this._pkg.version) {
+            this._pkg.version = (0, version_js_1.initializeVersion)(this._pkg.version);
+            core.info(`[${this.name}] Initialized missing version to ${this._pkg.version}`);
+        }
+    }
+    /**
+     * Save the package.json file to disk.
+     */
+    async save() {
+        await this.writeJSON(this.packageJsonPath, this._pkg);
+    }
+    /**
+     * Get commits affecting this package since a reference commit.
+     */
+    async getCommitsAffecting(sinceRef) {
+        return await (0, git_js_1.getCommitsAffecting)(this.dir, sinceRef);
+    }
+    /**
+     * Process version bump for this package based on conventional commits.
+     */
+    async processVersionBump(referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy, shouldForceBump = false) {
+        this.initializeVersion();
+        core.info(`[${this.name}@${this.version}] Processing package`);
+        // Find changes since reference point
+        const commitsSinceReference = await this.getCommitsAffecting(referenceCommit);
+        const commitBasedBump = commitsSinceReference.length > 0
+            ? (0, commits_js_1.getMostSignificantBump)(commitsSinceReference)
+            : null;
+        // Calculate historical bump type from reference
+        const historicalVersion = referenceVersion;
+        const historicalBump = this.calculateBumpType(historicalVersion, this.version);
+        core.info(`[${this.name}@${this.version}] Commit-based bump: ${commitBasedBump || 'none'}, Historical bump: ${historicalBump || 'none'}`);
+        // Apply strategy for same bump type or force bump
+        const nextVersion = (0, versioning_js_1.getNextVersion)(this.version, commitBasedBump, historicalBump, strategy);
+        if (!nextVersion || nextVersion === this.version) {
+            if (shouldForceBump && commitBasedBump) {
+                return await this.performVersionBump(commitBasedBump, referenceCommit, commitMsgTemplate, gitStrategy);
+            }
+            core.info(`[${this.name}@${this.version}] Skipping - no changes needed`);
+            return null;
+        }
+        this.version = nextVersion;
+        await this.save();
+        const bumpType = this.determineBumpType(commitBasedBump);
+        await gitStrategy.commitVersionChange(this.dir, this.name, this.version, bumpType, commitMsgTemplate);
+        const result = {
+            version: this.version,
+            bumpType,
+            sha: referenceCommit,
+        };
+        core.info(`[${this.name}@${this.version}] Bumped to ${this.version} (${bumpType})`);
+        this._bumpResult = result;
+        return result;
+    }
+    /**
+     * Finalize a prerelease version to a stable release.
+     */
+    async finalizePrerelease(commitMsgTemplate, gitStrategy) {
+        if (!this.version || !this.isPrerelease()) {
+            return null;
+        }
+        const finalVersion = this.finalizeVersion(this.version);
+        core.info(`[${this.name}] Finalizing prerelease version: ${this.version} → ${finalVersion}`);
+        this.version = finalVersion;
+        await this.save();
+        await gitStrategy.commitVersionChange(this.dir, this.name, finalVersion, 'release', commitMsgTemplate);
+        const result = {
+            version: finalVersion,
+            bumpType: 'release',
+            sha: null
+        };
+        this._bumpResult = result;
+        return result;
+    }
+    /**
+     * Update a dependency to a new version.
+     */
+    async updateDependency(depName, newVersion, depCommitMsgTemplate, gitStrategy) {
+        let updated = false;
+        for (const depKey of index_js_1.DEPENDENCY_KEYS) {
+            const deps = this._pkg[depKey];
+            if (deps && deps[depName]) {
+                const currentDepSpec = deps[depName];
+                if (this.satisfiesVersion(newVersion, currentDepSpec)) {
+                    continue;
+                }
+                core.info(`[${this.name}] Updating ${depName} dependency from ${currentDepSpec} to ^${newVersion}`);
+                deps[depName] = `^${newVersion}`;
+                updated = true;
+            }
+        }
+        if (updated) {
+            await this.save();
+            await gitStrategy.commitDependencyUpdate(this.dir, this.name, depName, newVersion, depCommitMsgTemplate);
+            core.info(`[${this.name}] Updated dependencies for ${depName}`);
+        }
+        return updated;
+    }
+    /**
+     * Test compatibility after dependency updates.
+     */
+    async testCompatibility(packageManager) {
+        try {
+            const testResult = await packageManager.test(this.dir);
+            return testResult;
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.warning(`[${this.name}] Test execution failed: ${errorMessage}`);
+            return { success: false, error: errorMessage };
+        }
+    }
+    async performVersionBump(bumpType, referenceCommit, commitMsgTemplate, gitStrategy) {
+        const nextVersion = (0, versioning_js_1.getNextVersion)(this.version, bumpType, null, 'apply-bump');
+        if (!nextVersion) {
+            throw new Error(`Failed to calculate next version for ${this.name}`);
+        }
+        this.version = nextVersion;
+        await this.save();
+        const finalBumpType = this.determineBumpType(bumpType);
+        await gitStrategy.commitVersionChange(this.dir, this.name, this.version, finalBumpType, commitMsgTemplate);
+        const result = {
+            version: this.version,
+            bumpType: finalBumpType,
+            sha: referenceCommit,
+        };
+        this._bumpResult = result;
+        return result;
+    }
+    isPrerelease() {
+        const parsed = this.parseVersion(this.version);
+        return Boolean(parsed?.prerelease?.length);
+    }
+    finalizeVersion(version) {
+        const parsed = this.parseVersion(version);
+        if (parsed && parsed.prerelease.length > 0) {
+            return `${parsed.major}.${parsed.minor}.${parsed.patch}`;
+        }
+        return version;
+    }
+    calculateBumpType(fromVersion, toVersion) {
+        // This would use semver.diff logic - simplified for now
+        if (fromVersion === toVersion)
+            return null;
+        // Add proper semver diff logic here
+        return 'patch';
+    }
+    determineBumpType(commitBasedBump) {
+        return this.isPrerelease() ? 'prerelease' : commitBasedBump || 'patch';
+    }
+    satisfiesVersion(newVersion, currentSpec) {
+        // Simplified semver satisfaction check
+        return currentSpec.includes(newVersion);
+    }
+    parseVersion(version) {
+        // Simplified version parsing - would use semver.parse in real implementation
+        const match = version.match(/^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/);
+        if (!match)
+            return null;
+        return {
+            major: parseInt(match[1], 10),
+            minor: parseInt(match[2], 10),
+            patch: parseInt(match[3], 10),
+            prerelease: match[4] ? match[4].split('.') : [],
+        };
+    }
+    async writeJSON(filePath, data) {
+        await (0, promises_1.writeFile)(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+    }
+}
+exports.Package = Package;
+//# sourceMappingURL=package.js.map
+
+/***/ }),
+
+/***/ 137:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.VersionBumpApplication = void 0;
+exports.main = main;
+__nccwpck_require__(7959);
+const core = __importStar(__nccwpck_require__(7484));
+const git_js_1 = __nccwpck_require__(6959);
+const workspace_js_1 = __nccwpck_require__(1622);
+const factory_js_1 = __nccwpck_require__(2643);
+const factory_js_2 = __nccwpck_require__(4181);
+const configuration_js_1 = __nccwpck_require__(3096);
+const version_bump_js_1 = __nccwpck_require__(3027);
+const summary_js_1 = __nccwpck_require__(3182);
+/**
+ * Main application class that orchestrates the version bump process.
+ * Follows clean architecture principles with proper separation of concerns.
+ */
+class VersionBumpApplication {
+    exitCode = 0;
+    outputBranch;
+    hasBumped = false;
+    /**
+     * Run the complete version bump process.
+     */
+    async run() {
+        try {
+            core.info('🚀 Starting version bump action...');
+            // Step 1: Parse and validate configuration
+            const config = await this.parseConfiguration();
+            core.info(`📋 Configuration loaded: strategy=${config.strategy}, base=${config.baseBranch || 'none'}`);
+            // Step 2: Setup git and determine branches
+            const gitSetup = await (0, git_js_1.setupGit)(config.shouldCreateBranch, config.branchTemplate);
+            this.outputBranch = gitSetup.newBranch;
+            // Step 3: Load root package and initialize services
+            const { pkg: rootPkg } = await (0, workspace_js_1.findRootPackage)();
+            const packageManager = factory_js_2.PackageManagerFactory.getPackageManager();
+            const gitStrategy = factory_js_1.GitOperationStrategyFactory.getStrategy('conventional');
+            core.info(`📦 Package manager: ${packageManager.name}`);
+            core.info(`🔧 Git strategy: ${gitStrategy.name}`);
+            // Step 4: Initialize services
+            const versionBumpService = new version_bump_js_1.VersionBumpService(gitStrategy, packageManager);
+            const summaryService = new summary_js_1.SummaryService();
+            // Step 5: Discover and process packages
+            const packages = await (0, workspace_js_1.createWorkspacePackages)(rootPkg);
+            core.info(`📁 Discovered ${packages.length} packages`);
+            // Step 6: Execute version bump process
+            const results = await versionBumpService.processWorkspace(packages, rootPkg, config);
+            this.hasBumped = results.hasBumped;
+            // Step 7: Generate comprehensive summary
+            await summaryService.generateSummary(results, config);
+            // Step 8: Handle success
+            if (this.hasBumped) {
+                core.info('✅ Version bump action completed successfully with changes');
+                core.notice(`Version bump completed: ${results.totalPackages} packages updated`);
+            }
+            else {
+                core.info('✅ Version bump action completed successfully with no changes needed');
+                core.notice(`No version changes needed with strategy '${config.strategy}'`);
+            }
+            // Set outputs for GitHub Actions
+            this.setActionOutputs(results, config);
+        }
+        catch (error) {
+            this.handleError(error);
+        }
+        finally {
+            await this.finalize();
+        }
+    }
+    /**
+     * Parse and validate action configuration from inputs.
+     */
+    async parseConfiguration() {
+        const configService = new configuration_js_1.ConfigurationService();
+        return await configService.parseConfiguration();
+    }
+    /**
+     * Handle errors that occur during execution.
+     */
+    handleError(error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        core.error(`❌ Version bump failed: ${errorMessage}`);
+        core.setFailed(errorMessage);
+        this.exitCode = 1;
+    }
+    /**
+     * Finalize the process by pushing changes if any were made.
+     */
+    async finalize() {
+        if (this.hasBumped) {
+            try {
+                await (0, git_js_1.pushChanges)(this.outputBranch);
+                if (this.outputBranch) {
+                    core.setOutput('branch', this.outputBranch);
+                }
+            }
+            catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                core.error(`Failed to push changes: ${errorMessage}`);
+                core.setFailed(`Failed to push changes: ${errorMessage}`);
+                this.exitCode = 1;
+            }
+        }
+        else {
+            core.info('📝 No changes to push');
+        }
+        // Write summary to GitHub Actions
+        await core.summary.write({ overwrite: true });
+        // Exit with appropriate code
+        process.exit(this.exitCode);
+    }
+    /**
+     * Set GitHub Actions outputs based on results.
+     */
+    setActionOutputs(results, config) {
+        core.setOutput('packages-updated', results.totalPackages);
+        core.setOutput('releases-created', results.releasePackages);
+        core.setOutput('prereleases-created', results.prereleasePackages);
+        core.setOutput('versions-finalized', results.finalizedPackages);
+        core.setOutput('test-failures', results.testFailures?.length || 0);
+        core.setOutput('strategy-used', config.strategy);
+        core.setOutput('changes-made', this.hasBumped);
+        // Export useful environment variables
+        core.exportVariable('VERSION_BUMP_PACKAGES_UPDATED', results.totalPackages);
+        core.exportVariable('VERSION_BUMP_CHANGES_MADE', this.hasBumped);
+        core.exportVariable('VERSION_BUMP_STRATEGY', config.strategy);
+    }
+}
+exports.VersionBumpApplication = VersionBumpApplication;
+/**
+ * Application entry point.
+ * Creates and runs the version bump application.
+ */
+async function main() {
+    const app = new VersionBumpApplication();
+    await app.run();
+}
+// Run the application if this file is executed directly
+if (require.main === require.cache[eval('__filename')]) {
+    main().catch((error) => {
+        console.error('Unhandled error:', error);
+        process.exit(1);
+    });
+}
+exports["default"] = main;
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 3096:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ConfigurationService = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const validation_js_1 = __nccwpck_require__(6016);
+const factory_js_1 = __nccwpck_require__(7317);
+const factory_js_2 = __nccwpck_require__(3943);
+/**
+ * Service responsible for parsing and validating action configuration.
+ * Handles GitHub Actions inputs and provides validated configuration objects.
+ */
+class ConfigurationService {
+    /**
+     * Parse configuration from GitHub Actions inputs.
+     */
+    async parseConfiguration() {
+        const rawConfig = this.parseRawInputs();
+        const validatedConfig = (0, validation_js_1.validateConfiguration)(rawConfig);
+        this.logConfiguration(validatedConfig);
+        this.validateStrategyCompatibility(validatedConfig);
+        return validatedConfig;
+    }
+    /**
+     * Parse raw inputs from GitHub Actions.
+     */
+    parseRawInputs() {
+        const result = {
+            shouldCreateBranch: this.safeGetBooleanInput('create_branch', false),
+            tagPrereleases: this.safeGetBooleanInput('tag_prereleases', false),
+        };
+        const commitTemplate = core.getInput('commit_template');
+        if (commitTemplate)
+            result.commitMsgTemplate = commitTemplate;
+        const depCommitTemplate = core.getInput('dependency_commit_template');
+        if (depCommitTemplate)
+            result.depCommitMsgTemplate = depCommitTemplate;
+        const branchTemplate = core.getInput('branch_template');
+        if (branchTemplate)
+            result.branchTemplate = branchTemplate;
+        const branchCleanup = core.getInput('branch_cleanup');
+        if (branchCleanup)
+            result.branchCleanup = branchCleanup;
+        const baseBranch = core.getInput('base');
+        if (baseBranch)
+            result.baseBranch = baseBranch;
+        const strategy = core.getInput('strategy');
+        if (strategy)
+            result.strategy = strategy;
+        const activeBranch = core.getInput('branch');
+        if (activeBranch)
+            result.activeBranch = activeBranch;
+        return result;
+    }
+    /**
+     * Safely parse boolean input with fallback to default.
+     */
+    safeGetBooleanInput(input, defaultValue) {
+        try {
+            const value = core.getInput(input);
+            if (!value)
+                return defaultValue;
+            return core.getBooleanInput(input);
+        }
+        catch {
+            return defaultValue;
+        }
+    }
+    /**
+     * Log the final configuration for debugging.
+     */
+    logConfiguration(config) {
+        core.startGroup('📋 Configuration');
+        core.info(`Strategy: ${config.strategy}`);
+        core.info(`Active branch: ${config.activeBranch}`);
+        core.info(`Base branch: ${config.baseBranch || 'none'}`);
+        core.info(`Tag prereleases: ${config.tagPrereleases}`);
+        core.info(`Create branch: ${config.shouldCreateBranch}`);
+        core.info(`Branch template: ${config.branchTemplate}`);
+        core.info(`Branch cleanup: ${config.branchCleanup}`);
+        core.info(`Commit template: ${config.commitMsgTemplate}`);
+        core.info(`Dependency commit template: ${config.depCommitMsgTemplate}`);
+        core.endGroup();
+    }
+    /**
+     * Validate strategy compatibility and log warnings.
+     */
+    validateStrategyCompatibility(config) {
+        // Check version bump strategy availability
+        const availableStrategies = factory_js_1.VersionBumpStrategyFactory.getAvailableStrategies();
+        if (!availableStrategies.includes(config.strategy)) {
+            throw new Error(`Invalid strategy: ${config.strategy}. Available: ${availableStrategies.join(', ')}`);
+        }
+        // Check branch cleanup strategy availability
+        const availableCleanupStrategies = factory_js_2.BranchCleanupStrategyFactory.getAvailableStrategies();
+        if (!availableCleanupStrategies.includes(config.branchCleanup)) {
+            throw new Error(`Invalid branch cleanup strategy: ${config.branchCleanup}. Available: ${availableCleanupStrategies.join(', ')}`);
+        }
+        // Warn about potential issues
+        if (config.strategy === 'pre-release' && !config.baseBranch) {
+            core.warning('Using pre-release strategy without base branch - prerelease finalization will not be available');
+        }
+        if (config.shouldCreateBranch && !config.baseBranch) {
+            core.warning('Creating branch without base branch specified - using "main" as default');
+        }
+    }
+}
+exports.ConfigurationService = ConfigurationService;
+//# sourceMappingURL=configuration.js.map
+
+/***/ }),
+
+/***/ 5000:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DiscoveryService = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const simple_git_1 = __importDefault(__nccwpck_require__(9065));
+const git = (0, simple_git_1.default)();
+/**
+ * Service responsible for discovering git reference points and version information.
+ * Handles tag-based and branch-based reference point strategies.
+ */
+class DiscoveryService {
+    /**
+     * Determine the reference point for version comparison.
+     */
+    async determineReferencePoint(baseBranch, activeBranch) {
+        if (baseBranch) {
+            return await this.findBranchBasedReference(baseBranch, activeBranch);
+        }
+        else {
+            return await this.findTagBasedReference();
+        }
+    }
+    /**
+     * Find reference point based on branch comparison.
+     */
+    async findBranchBasedReference(baseBranch, activeBranch) {
+        core.info(`🔍 Using branch-based reference: ${baseBranch}`);
+        try {
+            // Check if we're on the base branch (finalization scenario)
+            const currentBranch = await this.getCurrentBranch();
+            const shouldFinalizeVersions = currentBranch === baseBranch;
+            // Find last non-merge commit on base branch
+            const branch = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`;
+            const referenceCommit = await this.findLastNonMergeCommit(branch);
+            // Get version at that commit
+            const referenceVersion = await this.getVersionAtCommit(referenceCommit) || '0.0.0';
+            // Check if we should force bump based on branch state
+            const shouldForceBump = !shouldFinalizeVersions && activeBranch !== baseBranch;
+            core.debug(`Branch reference: commit=${referenceCommit}, version=${referenceVersion}, finalize=${shouldFinalizeVersions}`);
+            return {
+                referenceCommit,
+                referenceVersion,
+                shouldFinalizeVersions,
+                shouldForceBump,
+            };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.warning(`Failed to find branch-based reference: ${errorMessage}`);
+            // Fallback to tag-based reference
+            return await this.findTagBasedReference();
+        }
+    }
+    /**
+     * Find reference point based on latest git tag.
+     */
+    async findTagBasedReference() {
+        core.info('🔍 Using tag-based reference');
+        try {
+            // Get latest tag
+            const tags = await git.tags(['--sort=-v:refname']);
+            const latestTag = tags.latest;
+            if (latestTag) {
+                const referenceCommit = await git.revparse([latestTag]);
+                const referenceVersion = latestTag.replace(/^v/, ''); // Remove 'v' prefix if present
+                core.debug(`Tag reference: tag=${latestTag}, commit=${referenceCommit}, version=${referenceVersion}`);
+                return {
+                    referenceCommit,
+                    referenceVersion,
+                    shouldFinalizeVersions: false,
+                    shouldForceBump: false,
+                };
+            }
+            else {
+                // No tags found, use initial commit
+                core.info('📦 No tags found, using initial commit as reference');
+                const referenceCommit = await this.findInitialCommit();
+                return {
+                    referenceCommit,
+                    referenceVersion: '0.0.0',
+                    shouldFinalizeVersions: false,
+                    shouldForceBump: true, // Force bump from initial state
+                };
+            }
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.error(`Failed to find tag-based reference: ${errorMessage}`);
+            throw new Error(`Reference point discovery failed: ${errorMessage}`);
+        }
+    }
+    /**
+     * Find the last non-merge commit on a branch.
+     */
+    async findLastNonMergeCommit(branch) {
+        try {
+            const log = await git.log({
+                from: branch,
+                maxCount: 100, // Look at last 100 commits
+            });
+            // Find first non-merge commit
+            for (const commit of log.all) {
+                if (!commit.message.startsWith('Merge ')) {
+                    return commit.hash;
+                }
+            }
+            // Fallback to latest commit if no non-merge found
+            return log.latest?.hash || 'HEAD';
+        }
+        catch (error) {
+            core.warning(`Failed to find last non-merge commit on ${branch}, using HEAD`);
+            return 'HEAD';
+        }
+    }
+    /**
+     * Get the current branch name.
+     */
+    async getCurrentBranch() {
+        try {
+            const branch = await git.branch();
+            return branch.current;
+        }
+        catch (error) {
+            // Fallback to environment variables
+            return process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || 'main';
+        }
+    }
+    /**
+     * Get package version at a specific commit.
+     */
+    async getVersionAtCommit(commitRef) {
+        try {
+            const packageJsonContent = await git.show([`${commitRef}:package.json`]);
+            const packageJson = JSON.parse(packageJsonContent);
+            return packageJson.version || null;
+        }
+        catch (error) {
+            core.debug(`Failed to get version at commit ${commitRef}: ${error}`);
+            return null;
+        }
+    }
+    /**
+     * Find the initial commit of the repository.
+     */
+    async findInitialCommit() {
+        try {
+            const log = await git.log({ maxCount: 1000 });
+            const commits = log.all;
+            if (commits.length > 0) {
+                return commits[commits.length - 1].hash;
+            }
+            return 'HEAD';
+        }
+        catch (error) {
+            core.warning('Failed to find initial commit, using HEAD');
+            return 'HEAD';
+        }
+    }
+    /**
+     * Find the last version change commit for a specific package.
+     */
+    async findLastVersionChangeCommit(packageJsonPath) {
+        try {
+            const log = await git.log({
+                file: packageJsonPath,
+                maxCount: 50,
+            });
+            // Look for commits that actually changed the version
+            for (const commit of log.all) {
+                try {
+                    const diff = await git.diff([`${commit.hash}~1..${commit.hash}`, '--', packageJsonPath]);
+                    if (diff.includes('"version":')) {
+                        return commit.hash;
+                    }
+                }
+                catch {
+                    // Ignore errors for individual commits
+                }
+            }
+            return null;
+        }
+        catch (error) {
+            core.debug(`Failed to find last version change for ${packageJsonPath}: ${error}`);
+            return null;
+        }
+    }
+}
+exports.DiscoveryService = DiscoveryService;
+//# sourceMappingURL=discovery.js.map
+
+/***/ }),
+
+/***/ 3182:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SummaryService = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+/**
+ * Service responsible for generating comprehensive summaries and reports.
+ * Handles GitHub Actions summary creation and output generation.
+ */
+class SummaryService {
+    /**
+     * Generate comprehensive summary for the version bump process.
+     */
+    async generateSummary(results, config) {
+        await this.generateActionsSummary(results, config);
+        this.logResultsSummary(results, config);
+        this.generateNotices(results, config);
+    }
+    /**
+     * Generate GitHub Actions summary with detailed tables.
+     */
+    async generateActionsSummary(results, config) {
+        core.summary.addHeading('📦 Version Bump Summary', 2);
+        if (results.totalPackages > 0) {
+            // Package changes table
+            core.summary.addTable([
+                [
+                    { data: 'Package', header: true },
+                    { data: 'Version', header: true },
+                    { data: 'Bump Type', header: true },
+                    { data: 'Previous Commit', header: true },
+                    { data: 'Status', header: true },
+                ],
+                ...Object.entries(results.bumped).map(([name, result]) => [
+                    { data: name },
+                    { data: result.version },
+                    { data: this.formatBumpType(result.bumpType) },
+                    { data: result.sha?.slice(0, 7) || 'N/A' },
+                    { data: results.testFailures.includes(name) ? '❌ Failed' : '✅ Success' },
+                ]),
+            ]);
+        }
+        else {
+            core.summary.addRaw('✨ No packages required version changes.');
+        }
+        // Configuration summary
+        core.summary.addHeading('⚙️ Configuration Used', 3);
+        core.summary.addList([
+            `**Strategy**: ${config.strategy}`,
+            `**Active Branch**: ${config.activeBranch}`,
+            `**Base Branch**: ${config.baseBranch || 'none (tag-based)'}`,
+            `**Tag Prereleases**: ${config.tagPrereleases ? 'enabled' : 'disabled'}`,
+            `**Create Branch**: ${config.shouldCreateBranch ? 'enabled' : 'disabled'}`,
+            `**Branch Cleanup**: ${config.branchCleanup}`,
+        ]);
+        // Statistics summary
+        core.summary.addHeading('📊 Statistics', 3);
+        core.summary.addList([
+            `**Total Packages Processed**: ${results.totalPackages}`,
+            `**Release Versions**: ${results.releasePackages}`,
+            `**Prerelease Versions**: ${results.prereleasePackages}`,
+            `**Finalized Versions**: ${results.finalizedPackages}`,
+            `**Test Failures**: ${results.testFailures.length}`,
+        ]);
+        // Add recommendations if any
+        this.addRecommendations(results, config);
+    }
+    /**
+     * Log summary to console for debugging.
+     */
+    logResultsSummary(results, config) {
+        core.startGroup('📊 Results Summary');
+        if (results.totalPackages > 0) {
+            core.info(`✅ Processed ${results.totalPackages} packages:`);
+            core.info(`   • ${results.releasePackages} release versions`);
+            core.info(`   • ${results.prereleasePackages} prerelease versions`);
+            core.info(`   • ${results.finalizedPackages} finalized versions`);
+            if (results.testFailures.length > 0) {
+                core.warning(`⚠️  ${results.testFailures.length} packages failed tests: ${results.testFailures.join(', ')}`);
+            }
+        }
+        else {
+            core.info(`ℹ️  No packages required version changes with strategy '${config.strategy}'`);
+        }
+        core.endGroup();
+    }
+    /**
+     * Generate GitHub Actions notices based on results.
+     */
+    generateNotices(results, config) {
+        if (results.totalPackages > 0) {
+            const releaseCount = results.releasePackages;
+            const prereleaseCount = results.prereleasePackages;
+            if (releaseCount > 0 && prereleaseCount > 0) {
+                core.notice(`🚀 Version bump completed: ${releaseCount} releases and ${prereleaseCount} prereleases created`);
+            }
+            else if (releaseCount > 0) {
+                core.notice(`🚀 Version bump completed: ${releaseCount} release${releaseCount === 1 ? '' : 's'} created`);
+            }
+            else if (prereleaseCount > 0) {
+                core.notice(`🧪 Version bump completed: ${prereleaseCount} prerelease${prereleaseCount === 1 ? '' : 's'} created`);
+            }
+            if (results.testFailures.length > 0) {
+                core.warning(`⚠️ ${results.testFailures.length} package${results.testFailures.length === 1 ? '' : 's'} failed compatibility tests`);
+            }
+        }
+        else {
+            core.notice(`ℹ️ No version changes needed with strategy '${config.strategy}'`);
+        }
+    }
+    /**
+     * Add recommendations section to summary.
+     */
+    addRecommendations(results, config) {
+        const recommendations = [];
+        // Strategy recommendations
+        if (config.strategy === 'do-nothing' && results.totalPackages === 0) {
+            recommendations.push('Consider using `apply-bump` strategy if you want to apply version bumps');
+        }
+        if (config.strategy === 'pre-release' && !config.baseBranch) {
+            recommendations.push('Set a base branch to enable prerelease finalization');
+        }
+        // Test failure recommendations
+        if (results.testFailures.length > 0) {
+            recommendations.push('Review test failures and consider pinning dependency versions for compatibility');
+        }
+        // Branch management recommendations
+        if (config.branchCleanup === 'keep' && results.totalPackages > 0) {
+            recommendations.push('Consider using `prune` or `semantic` branch cleanup to keep workspace clean');
+        }
+        if (recommendations.length > 0) {
+            core.summary.addHeading('💡 Recommendations', 3);
+            core.summary.addList(recommendations);
+        }
+    }
+    /**
+     * Format bump type with emoji for better readability.
+     */
+    formatBumpType(bumpType) {
+        switch (bumpType) {
+            case 'major':
+                return '🔴 major';
+            case 'minor':
+                return '🟡 minor';
+            case 'patch':
+                return '🟢 patch';
+            case 'prerelease':
+                return '🧪 prerelease';
+            case 'release':
+                return '🚀 release';
+            default:
+                return bumpType;
+        }
+    }
+}
+exports.SummaryService = SummaryService;
+//# sourceMappingURL=summary.js.map
+
+/***/ }),
+
+/***/ 3027:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.VersionBumpService = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const discovery_js_1 = __nccwpck_require__(5000);
+const version_js_1 = __nccwpck_require__(611);
+const version_js_2 = __nccwpck_require__(611);
+/**
+ * Service responsible for orchestrating the complete version bump process.
+ * Handles package discovery, version calculation, and dependency updates.
+ */
+class VersionBumpService {
+    gitStrategy;
+    packageManager;
+    discoveryService;
+    constructor(gitStrategy, packageManager) {
+        this.gitStrategy = gitStrategy;
+        this.packageManager = packageManager;
+        this.discoveryService = new discovery_js_1.DiscoveryService();
+    }
+    /**
+     * Process the entire workspace for version bumps.
+     */
+    async processWorkspace(packages, rootPkg, config) {
+        // Step 1: Determine reference point for version comparison
+        const referencePoint = await this.discoveryService.determineReferencePoint(config.baseBranch, config.activeBranch);
+        core.info(`🎯 Reference: ${referencePoint.referenceCommit} (version: ${referencePoint.referenceVersion})`);
+        let results;
+        // Step 2: Handle prerelease finalization or normal processing
+        if (referencePoint.shouldFinalizeVersions) {
+            results = await this.finalizePackageVersions(packages, rootPkg, config);
+        }
+        else {
+            results = await this.processNormalVersionBumps(packages, rootPkg, referencePoint, config);
+        }
+        return results;
+    }
+    /**
+     * Finalize prerelease versions when base branch is updated.
+     */
+    async finalizePackageVersions(packages, rootPkg, config) {
+        const bumped = {};
+        let hasBumped = false;
+        core.info('🔄 Finalizing prerelease versions for base branch update');
+        // Finalize workspace packages
+        for (const pkg of packages) {
+            const result = await pkg.finalizePrerelease(config.commitMsgTemplate, this.gitStrategy);
+            if (result) {
+                bumped[pkg.name] = result;
+                hasBumped = true;
+            }
+        }
+        // Finalize root package if it's a prerelease
+        if (this.isPrerelease(rootPkg.version)) {
+            const finalVersion = (0, version_js_1.finalizeVersion)(rootPkg.version);
+            core.info(`🔧 Finalizing root prerelease: ${rootPkg.version} → ${finalVersion}`);
+            rootPkg.version = finalVersion;
+            await this.saveRootPackage(rootPkg);
+            await this.gitStrategy.commitVersionChange(process.cwd(), rootPkg.name || 'root', finalVersion, 'release', config.commitMsgTemplate);
+            bumped[rootPkg.name || 'root'] = {
+                version: finalVersion,
+                bumpType: 'release',
+                sha: null,
+            };
+            hasBumped = true;
+            // Create release tags for finalized versions
+            await this.gitStrategy.tagVersion(finalVersion, false, true);
+        }
+        const stats = this.calculateStats(bumped);
+        return {
+            bumped,
+            testFailures: [],
+            ...stats,
+            hasBumped,
+        };
+    }
+    /**
+     * Process normal version bumps based on conventional commits.
+     */
+    async processNormalVersionBumps(packages, rootPkg, referencePoint, config) {
+        // Step 1: Process workspace packages
+        const workspaceResults = await this.processWorkspacePackages(packages, referencePoint, config);
+        // Step 2: Process root package
+        const rootResults = await this.processRootPackage(rootPkg, workspaceResults.bumped, referencePoint, config);
+        // Merge results
+        const finalBumped = { ...workspaceResults.bumped, ...rootResults.bumped };
+        const hasBumped = workspaceResults.hasBumped || rootResults.hasBumped;
+        const stats = this.calculateStats(finalBumped);
+        return {
+            bumped: finalBumped,
+            testFailures: workspaceResults.testFailures,
+            ...stats,
+            hasBumped,
+        };
+    }
+    /**
+     * Process version bumps for all workspace packages.
+     */
+    async processWorkspacePackages(packages, referencePoint, config) {
+        const bumped = {};
+        const testFailures = [];
+        // Process each package for version bumps
+        for (const pkg of packages) {
+            const result = await pkg.processVersionBump(referencePoint.referenceCommit, referencePoint.referenceVersion, config.strategy, config.commitMsgTemplate, this.gitStrategy, referencePoint.shouldForceBump);
+            if (result) {
+                bumped[pkg.name] = result;
+            }
+        }
+        // Update dependencies for bumped packages
+        await this.updateDependencies(packages, bumped, config, testFailures);
+        return {
+            bumped,
+            testFailures,
+            hasBumped: Object.keys(bumped).length > 0,
+        };
+    }
+    /**
+     * Update dependencies between packages when versions change.
+     */
+    async updateDependencies(packages, bumped, config, testFailures) {
+        for (const pkg of packages) {
+            if (!bumped[pkg.name])
+                continue;
+            for (const siblingPkg of packages) {
+                if (siblingPkg.name === pkg.name)
+                    continue;
+                const updated = await siblingPkg.updateDependency(pkg.name, pkg.version, config.depCommitMsgTemplate, this.gitStrategy);
+                // Test compatibility for major version bumps
+                if (updated && bumped[pkg.name].bumpType === 'major') {
+                    const testResult = await siblingPkg.testCompatibility(this.packageManager);
+                    if (!testResult.success) {
+                        core.warning(`🧪 Tests failed for ${siblingPkg.name} after major bump of ${pkg.name}`);
+                        testFailures.push(siblingPkg.name);
+                        // Could implement version rollback logic here
+                    }
+                }
+            }
+        }
+    }
+    /**
+     * Process root package version bump based on workspace changes.
+     */
+    async processRootPackage(rootPkg, workspaceBumped, referencePoint, _config) {
+        if (!rootPkg.workspaces) {
+            return { bumped: {}, hasBumped: false };
+        }
+        core.info(`🏠 Processing root package: ${rootPkg.name || 'root'}@${rootPkg.version}`);
+        // Calculate most significant bump from workspace changes
+        const workspaceBumpTypes = Object.values(workspaceBumped).map(b => b.bumpType);
+        const workspaceBump = (0, version_js_2.getMostSignificantBumpType)(workspaceBumpTypes);
+        if (!workspaceBump) {
+            core.info('🏠 No workspace changes requiring root package bump');
+            return { bumped: {}, hasBumped: false };
+        }
+        // Calculate historical bump type
+        const historicalBump = (0, version_js_1.calculateBumpType)(referencePoint.referenceVersion, rootPkg.version);
+        core.info(`🏠 Required bump: ${workspaceBump}, Historical bump: ${historicalBump || 'none'}`);
+        // Apply version bump logic similar to workspace packages
+        // This would use the same strategy pattern logic
+        // Implementation simplified for brevity
+        return { bumped: {}, hasBumped: false };
+    }
+    /**
+     * Calculate statistics from bump results.
+     */
+    calculateStats(bumped) {
+        const totalPackages = Object.keys(bumped).length;
+        const prereleasePackages = Object.values(bumped).filter(b => this.isPrerelease(b.version)).length;
+        const releasePackages = totalPackages - prereleasePackages;
+        const finalizedPackages = Object.values(bumped).filter(b => b.bumpType === 'release').length;
+        return {
+            totalPackages,
+            releasePackages,
+            prereleasePackages,
+            finalizedPackages,
+        };
+    }
+    /**
+     * Check if a version is a prerelease.
+     */
+    isPrerelease(version) {
+        return version.includes('-');
+    }
+    /**
+     * Save the root package.json file.
+     */
+    async saveRootPackage(rootPkg) {
+        const path = __nccwpck_require__(6760);
+        const fs = __nccwpck_require__(1455);
+        const rootPath = path.join(process.cwd(), 'package.json');
+        const content = `${JSON.stringify(rootPkg, null, 2)}\n`;
+        await fs.writeFile(rootPath, content, 'utf8');
+    }
+}
+exports.VersionBumpService = VersionBumpService;
+//# sourceMappingURL=version-bump.js.map
+
+/***/ }),
+
+/***/ 8984:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.BaseBranchCleanupStrategy = void 0;
+/**
+ * Abstract base class for branch cleanup strategies.
+ * Implements the Strategy pattern for handling different branch cleanup approaches.
+ */
+class BaseBranchCleanupStrategy {
+    name;
+    constructor(name) {
+        this.name = name;
+    }
+}
+exports.BaseBranchCleanupStrategy = BaseBranchCleanupStrategy;
+//# sourceMappingURL=base.js.map
+
+/***/ }),
+
+/***/ 3943:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.BranchCleanupStrategyFactory = void 0;
+const keep_all_js_1 = __nccwpck_require__(813);
+const prune_old_js_1 = __nccwpck_require__(6809);
+const semantic_js_1 = __nccwpck_require__(5969);
+/**
+ * Factory class for creating branch cleanup strategies.
+ * Implements the Factory pattern to provide strategy instances.
+ */
+class BranchCleanupStrategyFactory {
+    static strategies = new Map([
+        ['keep', new keep_all_js_1.KeepAllBranchesStrategy()],
+        ['prune', new prune_old_js_1.PruneOldBranchesStrategy()],
+        ['semantic', new semantic_js_1.SemanticBranchesStrategy()],
+    ]);
+    /**
+     * Get a branch cleanup strategy by name.
+     * @param strategyName - The name of the strategy to retrieve
+     * @returns The strategy instance
+     * @throws Error if the strategy is not found
+     */
+    static getStrategy(strategyName) {
+        const strategy = this.strategies.get(strategyName);
+        if (!strategy) {
+            throw new Error(`Unknown branch cleanup strategy: ${strategyName}. Available strategies: ${this.getAvailableStrategies().join(', ')}`);
+        }
+        return strategy;
+    }
+    /**
+     * Get all available strategy names.
+     * @returns Array of available strategy names
+     */
+    static getAvailableStrategies() {
+        return Array.from(this.strategies.keys());
+    }
+    /**
+     * Check if a strategy exists.
+     * @param strategyName - The strategy name to check
+     * @returns True if the strategy exists
+     */
+    static hasStrategy(strategyName) {
+        return this.strategies.has(strategyName);
+    }
+}
+exports.BranchCleanupStrategyFactory = BranchCleanupStrategyFactory;
+//# sourceMappingURL=factory.js.map
+
+/***/ }),
+
+/***/ 813:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.KeepAllBranchesStrategy = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const base_js_1 = __nccwpck_require__(8984);
+/**
+ * Keep-all strategy that preserves all version branches.
+ * This is the safest option as it doesn't delete any branches.
+ */
+class KeepAllBranchesStrategy extends base_js_1.BaseBranchCleanupStrategy {
+    constructor() {
+        super('keep');
+    }
+    async execute(_branches, _versionedBranch, _templateRegex, _rootBump) {
+        core.info(`[root] Branch cleanup strategy: ${this.name} - keeping all branches`);
+        // Intentionally empty - keep all branches
+    }
+}
+exports.KeepAllBranchesStrategy = KeepAllBranchesStrategy;
+//# sourceMappingURL=keep-all.js.map
+
+/***/ }),
+
+/***/ 6809:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PruneOldBranchesStrategy = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const simple_git_1 = __importDefault(__nccwpck_require__(9065));
+const base_js_1 = __nccwpck_require__(8984);
+const git = (0, simple_git_1.default)();
+/**
+ * Prune-old strategy that removes all old version branches except the current one.
+ * This keeps the workspace clean by removing outdated version branches.
+ */
+class PruneOldBranchesStrategy extends base_js_1.BaseBranchCleanupStrategy {
+    constructor() {
+        super('prune');
+    }
+    async execute(branches, versionedBranch, templateRegex, _rootBump) {
+        core.info(`[root] Branch cleanup strategy: ${this.name} - removing old branches`);
+        const cleanupPromises = branches.all
+            .filter(branch => branch.replace('origin/', '') !== versionedBranch)
+            .filter(branch => this.isVersionBranch(branch, templateRegex))
+            .map(branch => this.deleteBranchSafely(branch));
+        await Promise.allSettled(cleanupPromises);
+    }
+    isVersionBranch(branch, templateRegex) {
+        const match = branch.match(templateRegex);
+        return Boolean(match?.groups?.version);
+    }
+    async deleteBranchSafely(branch) {
+        try {
+            core.info(`[root] Deleting old branch ${branch}`);
+            await git.deleteLocalBranch(branch, true);
+            core.debug(`[root] Successfully deleted branch ${branch}`);
+        }
+        catch (error) {
+            core.warning(`[root] Failed to delete branch ${branch}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+}
+exports.PruneOldBranchesStrategy = PruneOldBranchesStrategy;
+//# sourceMappingURL=prune-old.js.map
+
+/***/ }),
+
+/***/ 5969:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SemanticBranchesStrategy = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const simple_git_1 = __importDefault(__nccwpck_require__(9065));
+const base_js_1 = __nccwpck_require__(8984);
+const version_js_1 = __nccwpck_require__(611);
+const git = (0, simple_git_1.default)();
+/**
+ * Semantic strategy that keeps only branches with different bump types.
+ * This allows multiple major/minor/patch branches to coexist while cleaning up duplicates.
+ */
+class SemanticBranchesStrategy extends base_js_1.BaseBranchCleanupStrategy {
+    constructor() {
+        super('semantic');
+    }
+    async execute(branches, versionedBranch, templateRegex, rootBump) {
+        core.info(`[root] Branch cleanup strategy: ${this.name} - keeping same bump type only`);
+        const cleanupPromises = branches.all
+            .filter(branch => branch.replace('origin/', '') !== versionedBranch)
+            .filter(branch => this.shouldDeleteBranch(branch, templateRegex, rootBump))
+            .map(branch => this.deleteBranchSafely(branch));
+        await Promise.allSettled(cleanupPromises);
+    }
+    shouldDeleteBranch(branch, templateRegex, rootBump) {
+        const match = branch.match(templateRegex);
+        const version = match?.groups?.version;
+        if (!version) {
+            return false; // Not a version branch
+        }
+        const bumpType = (0, version_js_1.guessBumpType)(version);
+        if (bumpType !== rootBump) {
+            return false; // Keep different bump types
+        }
+        return true; // Delete same bump type
+    }
+    async deleteBranchSafely(branch) {
+        try {
+            const match = branch.match(/(?<version>\d+\.\d+\.\d+)/);
+            const version = match?.groups?.version;
+            const bumpType = version ? (0, version_js_1.guessBumpType)(version) : 'unknown';
+            core.info(`[root] Deleting same-type branch ${branch} (${bumpType})`);
+            await git.deleteLocalBranch(branch, true);
+            core.debug(`[root] Successfully deleted branch ${branch}`);
+        }
+        catch (error) {
+            core.warning(`[root] Failed to delete branch ${branch}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+}
+exports.SemanticBranchesStrategy = SemanticBranchesStrategy;
+//# sourceMappingURL=semantic.js.map
+
+/***/ }),
+
+/***/ 2572:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.BaseGitOperationStrategy = void 0;
+/**
+ * Abstract base class for git operation strategies.
+ * Implements the Strategy pattern for handling different git operation approaches.
+ */
+class BaseGitOperationStrategy {
+    name;
+    constructor(name) {
+        this.name = name;
+    }
+}
+exports.BaseGitOperationStrategy = BaseGitOperationStrategy;
+//# sourceMappingURL=base.js.map
+
+/***/ }),
+
+/***/ 3551:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ConventionalGitStrategy = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const simple_git_1 = __importDefault(__nccwpck_require__(9065));
+const base_js_1 = __nccwpck_require__(2572);
+const template_js_1 = __nccwpck_require__(6693);
+/**
+ * Conventional git strategy that uses conventional commit messages
+ * and follows standard git practices for version management.
+ */
+class ConventionalGitStrategy extends base_js_1.BaseGitOperationStrategy {
+    constructor() {
+        super('conventional');
+    }
+    async commitVersionChange(packageDir, packageName, version, bumpType, template) {
+        const git = (0, simple_git_1.default)(packageDir);
+        // Template the commit message
+        const message = (0, template_js_1.interpolateTemplate)(template, {
+            packageName,
+            version,
+            bumpType
+        });
+        await git.add('package.json');
+        await git.commit(message);
+        core.info(`[${packageName}] Committed version change: ${version}`);
+    }
+    async commitDependencyUpdate(packageDir, packageName, depName, depVersion, template) {
+        const git = (0, simple_git_1.default)(packageDir);
+        // Template the commit message  
+        const message = (0, template_js_1.interpolateTemplate)(template, {
+            packageName,
+            dependencyName: depName,
+            dependencyVersion: depVersion
+        });
+        await git.add('package.json');
+        await git.commit(message);
+        core.info(`[${packageName}] Committed dependency update: ${depName}@${depVersion}`);
+    }
+    async tagVersion(version, isPrerelease, shouldTag) {
+        if (!shouldTag) {
+            core.info(`[root] Skipping tag creation for ${version}`);
+            return;
+        }
+        const git = (0, simple_git_1.default)(process.cwd());
+        const tagName = `v${version}`;
+        const tagMessage = `chore(release): ${version}`;
+        try {
+            // Create annotated tag with message
+            await git.tag([tagName, '-a', '-m', tagMessage]);
+            core.info(`[root] Created ${isPrerelease ? 'prerelease ' : ''}tag: ${tagName}`);
+        }
+        catch (error) {
+            core.error(`Failed to create tag ${tagName}: ${error}`);
+            throw error;
+        }
+    }
+}
+exports.ConventionalGitStrategy = ConventionalGitStrategy;
+//# sourceMappingURL=conventional.js.map
+
+/***/ }),
+
+/***/ 2643:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GitOperationStrategyFactory = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const conventional_js_1 = __nccwpck_require__(3551);
+const simple_js_1 = __nccwpck_require__(1903);
+/**
+ * Factory class for creating git operation strategies.
+ * Implements the Factory pattern to provide strategy instances.
+ */
+class GitOperationStrategyFactory {
+    static strategies = new Map([
+        ['conventional', new conventional_js_1.ConventionalGitStrategy()],
+        ['simple', new simple_js_1.SimpleGitStrategy()],
+    ]);
+    /**
+     * Get a git operation strategy by name.
+     * @param strategyName - The name of the strategy to retrieve (defaults to 'conventional')
+     * @returns The strategy instance
+     */
+    static getStrategy(strategyName = 'conventional') {
+        const strategy = this.strategies.get(strategyName);
+        if (!strategy) {
+            core.warning(`Unknown git strategy: ${strategyName}, falling back to conventional`);
+            return this.strategies.get('conventional');
+        }
+        return strategy;
+    }
+    /**
+     * Get all available strategy names.
+     * @returns Array of available strategy names
+     */
+    static getAvailableStrategies() {
+        return Array.from(this.strategies.keys());
+    }
+    /**
+     * Check if a strategy exists.
+     * @param strategyName - The strategy name to check
+     * @returns True if the strategy exists
+     */
+    static hasStrategy(strategyName) {
+        return this.strategies.has(strategyName);
+    }
+}
+exports.GitOperationStrategyFactory = GitOperationStrategyFactory;
+//# sourceMappingURL=factory.js.map
+
+/***/ }),
+
+/***/ 1903:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SimpleGitStrategy = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const simple_git_1 = __importDefault(__nccwpck_require__(9065));
+const node_path_1 = __importDefault(__nccwpck_require__(6760));
+const base_js_1 = __nccwpck_require__(2572);
+const git = (0, simple_git_1.default)();
+/**
+ * Simple git strategy that uses minimal commit messages
+ * and basic git operations for version management.
+ */
+class SimpleGitStrategy extends base_js_1.BaseGitOperationStrategy {
+    constructor() {
+        super('simple');
+    }
+    async commitVersionChange(packageDir, packageName, version, _bumpType, _template) {
+        const commitMessage = `Bump ${packageName} to ${version}`;
+        try {
+            await git.add(node_path_1.default.join(packageDir, 'package.json'));
+            await git.commit(commitMessage);
+            core.info(`[${packageName}] Committed version change: ${commitMessage}`);
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.error(`[${packageName}] Failed to commit version change: ${errorMessage}`);
+            throw new Error(`Failed to commit version change for ${packageName}: ${errorMessage}`);
+        }
+    }
+    async commitDependencyUpdate(packageDir, packageName, depName, _depVersion, _template) {
+        const commitMessage = `Update ${depName} in ${packageName}`;
+        try {
+            await git.add(node_path_1.default.join(packageDir, 'package.json'));
+            await git.commit(commitMessage);
+            core.info(`[${packageName}] Committed dependency update: ${commitMessage}`);
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.error(`[${packageName}] Failed to commit dependency update: ${errorMessage}`);
+            throw new Error(`Failed to commit dependency update for ${packageName}: ${errorMessage}`);
+        }
+    }
+    async tagVersion(version, _isPrerelease, shouldTag) {
+        if (!shouldTag) {
+            core.debug(`[git] Skipping tag creation for ${version}`);
+            return;
+        }
+        const tagName = `v${version}`;
+        try {
+            await git.addTag(tagName);
+            core.info(`[git] Created tag ${tagName}`);
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.warning(`[git] Failed to create tag ${tagName}: ${errorMessage}`);
+            // Don't throw here - tag creation failure shouldn't fail the entire process
+        }
+    }
+}
+exports.SimpleGitStrategy = SimpleGitStrategy;
+//# sourceMappingURL=simple.js.map
+
+/***/ }),
+
+/***/ 6738:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.BasePackageManagerStrategy = void 0;
+/**
+ * Abstract base class for package manager strategies.
+ * Implements the Strategy pattern for handling different package managers.
+ */
+class BasePackageManagerStrategy {
+    name;
+    constructor(name) {
+        this.name = name;
+    }
+}
+exports.BasePackageManagerStrategy = BasePackageManagerStrategy;
+//# sourceMappingURL=base.js.map
+
+/***/ }),
+
+/***/ 4181:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PackageManagerFactory = void 0;
+const npm_js_1 = __nccwpck_require__(3742);
+const pnpm_js_1 = __nccwpck_require__(2062);
+const yarn_js_1 = __nccwpck_require__(7573);
+/**
+ * Factory class for creating package manager strategies.
+ * Automatically detects the appropriate package manager based on lock files.
+ */
+class PackageManagerFactory {
+    static strategies = [
+        new yarn_js_1.YarnPackageManagerStrategy(), // Check Yarn first (preferred)
+        new pnpm_js_1.PnpmPackageManagerStrategy(), // Then PNPM
+        new npm_js_1.NpmPackageManagerStrategy(), // NPM as fallback
+    ];
+    /**
+     * Get the appropriate package manager strategy based on environment detection.
+     * @returns The detected package manager strategy
+     */
+    static getPackageManager() {
+        for (const strategy of this.strategies) {
+            if (strategy.isAvailable()) {
+                return strategy;
+            }
+        }
+        // Fallback to NPM if no package manager is detected
+        return new npm_js_1.NpmPackageManagerStrategy();
+    }
+    /**
+     * Get a specific package manager strategy by name.
+     * @param name - The name of the package manager
+     * @returns The strategy instance
+     * @throws Error if the strategy is not found
+     */
+    static getStrategy(name) {
+        const strategy = this.strategies.find(s => s.name === name);
+        if (!strategy) {
+            throw new Error(`Unknown package manager: ${name}. Available: ${this.getAvailableStrategies().join(', ')}`);
+        }
+        return strategy;
+    }
+    /**
+     * Get all available strategy names.
+     * @returns Array of available strategy names
+     */
+    static getAvailableStrategies() {
+        return this.strategies.map(s => s.name);
+    }
+    /**
+     * Get all strategy instances.
+     * @returns Array of all strategy instances
+     */
+    static getAllStrategies() {
+        return this.strategies;
+    }
+}
+exports.PackageManagerFactory = PackageManagerFactory;
+//# sourceMappingURL=factory.js.map
+
+/***/ }),
+
+/***/ 3742:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.NpmPackageManagerStrategy = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const node_child_process_1 = __nccwpck_require__(1421);
+const promises_1 = __nccwpck_require__(1455);
+const node_path_1 = __importDefault(__nccwpck_require__(6760));
+const base_js_1 = __nccwpck_require__(6738);
+/**
+ * NPM package manager strategy.
+ * Handles NPM-specific operations and commands.
+ */
+class NpmPackageManagerStrategy extends base_js_1.BasePackageManagerStrategy {
+    constructor() {
+        super('npm');
+    }
+    isAvailable() {
+        try {
+            // Check if package-lock.json exists
+            const packageLockPath = node_path_1.default.join(process.cwd(), 'package-lock.json');
+            (0, promises_1.access)(packageLockPath).then(() => true).catch(() => false);
+            // Check if npm command is available
+            (0, node_child_process_1.execSync)('npm --version', { stdio: 'ignore' });
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
+    async test(packageDir) {
+        try {
+            core.debug(`[npm] Running tests in ${packageDir}`);
+            const result = (0, node_child_process_1.execSync)('npm test', {
+                cwd: packageDir,
+                stdio: 'pipe',
+                encoding: 'utf-8',
+                timeout: 60000, // 1 minute timeout
+            });
+            core.debug(`[npm] Test output: ${result}`);
+            return { success: true };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.debug(`[npm] Test failed: ${errorMessage}`);
+            return {
+                success: false,
+                error: errorMessage,
+            };
+        }
+    }
+    async install(packageDir) {
+        try {
+            core.info(`[npm] Installing dependencies in ${packageDir}`);
+            (0, node_child_process_1.execSync)('npm ci', {
+                cwd: packageDir,
+                stdio: 'inherit',
+                timeout: 300000, // 5 minute timeout
+            });
+            core.info(`[npm] Dependencies installed successfully`);
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.error(`[npm] Failed to install dependencies: ${errorMessage}`);
+            throw new Error(`NPM install failed: ${errorMessage}`);
+        }
+    }
+}
+exports.NpmPackageManagerStrategy = NpmPackageManagerStrategy;
+//# sourceMappingURL=npm.js.map
+
+/***/ }),
+
+/***/ 2062:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PnpmPackageManagerStrategy = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const node_child_process_1 = __nccwpck_require__(1421);
+const promises_1 = __nccwpck_require__(1455);
+const node_path_1 = __importDefault(__nccwpck_require__(6760));
+const base_js_1 = __nccwpck_require__(6738);
+/**
+ * PNPM package manager strategy.
+ * Handles PNPM-specific operations and commands.
+ */
+class PnpmPackageManagerStrategy extends base_js_1.BasePackageManagerStrategy {
+    constructor() {
+        super('pnpm');
+    }
+    isAvailable() {
+        try {
+            // Check if pnpm-lock.yaml exists
+            const pnpmLockPath = node_path_1.default.join(process.cwd(), 'pnpm-lock.yaml');
+            (0, promises_1.access)(pnpmLockPath).then(() => true).catch(() => false);
+            // Check if pnpm command is available
+            (0, node_child_process_1.execSync)('pnpm --version', { stdio: 'ignore' });
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
+    async test(packageDir) {
+        try {
+            core.debug(`[pnpm] Running tests in ${packageDir}`);
+            const result = (0, node_child_process_1.execSync)('pnpm test', {
+                cwd: packageDir,
+                stdio: 'pipe',
+                encoding: 'utf-8',
+                timeout: 60000, // 1 minute timeout
+            });
+            core.debug(`[pnpm] Test output: ${result}`);
+            return { success: true };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.debug(`[pnpm] Test failed: ${errorMessage}`);
+            return {
+                success: false,
+                error: errorMessage,
+            };
+        }
+    }
+    async install(packageDir) {
+        try {
+            core.info(`[pnpm] Installing dependencies in ${packageDir}`);
+            (0, node_child_process_1.execSync)('pnpm install --frozen-lockfile', {
+                cwd: packageDir,
+                stdio: 'inherit',
+                timeout: 300000, // 5 minute timeout
+            });
+            core.info(`[pnpm] Dependencies installed successfully`);
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.error(`[pnpm] Failed to install dependencies: ${errorMessage}`);
+            throw new Error(`PNPM install failed: ${errorMessage}`);
+        }
+    }
+}
+exports.PnpmPackageManagerStrategy = PnpmPackageManagerStrategy;
+//# sourceMappingURL=pnpm.js.map
+
+/***/ }),
+
+/***/ 7573:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.YarnPackageManagerStrategy = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const node_child_process_1 = __nccwpck_require__(1421);
+const promises_1 = __nccwpck_require__(1455);
+const node_path_1 = __importDefault(__nccwpck_require__(6760));
+const base_js_1 = __nccwpck_require__(6738);
+/**
+ * Yarn package manager strategy.
+ * Handles Yarn-specific operations and commands.
+ */
+class YarnPackageManagerStrategy extends base_js_1.BasePackageManagerStrategy {
+    constructor() {
+        super('yarn');
+    }
+    isAvailable() {
+        try {
+            // Check if yarn.lock exists
+            const yarnLockPath = node_path_1.default.join(process.cwd(), 'yarn.lock');
+            (0, promises_1.access)(yarnLockPath).then(() => true).catch(() => false);
+            // Check if yarn command is available
+            (0, node_child_process_1.execSync)('yarn --version', { stdio: 'ignore' });
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
+    async test(packageDir) {
+        try {
+            core.debug(`[yarn] Running tests in ${packageDir}`);
+            const result = (0, node_child_process_1.execSync)('yarn test', {
+                cwd: packageDir,
+                stdio: 'pipe',
+                encoding: 'utf-8',
+                timeout: 60000, // 1 minute timeout
+            });
+            core.debug(`[yarn] Test output: ${result}`);
+            return { success: true };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.debug(`[yarn] Test failed: ${errorMessage}`);
+            return {
+                success: false,
+                error: errorMessage,
+            };
+        }
+    }
+    async install(packageDir) {
+        try {
+            core.info(`[yarn] Installing dependencies in ${packageDir}`);
+            (0, node_child_process_1.execSync)('yarn install --frozen-lockfile', {
+                cwd: packageDir,
+                stdio: 'inherit',
+                timeout: 300000, // 5 minute timeout
+            });
+            core.info(`[yarn] Dependencies installed successfully`);
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.error(`[yarn] Failed to install dependencies: ${errorMessage}`);
+            throw new Error(`Yarn install failed: ${errorMessage}`);
+        }
+    }
+}
+exports.YarnPackageManagerStrategy = YarnPackageManagerStrategy;
+//# sourceMappingURL=yarn.js.map
+
+/***/ }),
+
+/***/ 7080:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ApplyBumpStrategy = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const semver = __importStar(__nccwpck_require__(2088));
+const base_js_1 = __nccwpck_require__(466);
+/**
+ * Apply-bump strategy that performs normal semantic version increments.
+ * This strategy will always apply the commit-based bump type.
+ */
+class ApplyBumpStrategy extends base_js_1.BaseVersionBumpStrategy {
+    constructor() {
+        super('apply-bump');
+    }
+    execute(currentVersion, commitBasedBump, _historicalBump) {
+        if (!commitBasedBump || !['major', 'minor', 'patch'].includes(commitBasedBump)) {
+            core.debug(`Strategy 'apply-bump': No valid bump type provided: ${commitBasedBump}`);
+            return null;
+        }
+        const current = semver.coerce(currentVersion)?.toString() ?? '0.0.0';
+        const nextVersion = semver.inc(current, commitBasedBump);
+        if (!nextVersion) {
+            core.warning(`Strategy 'apply-bump': Failed to increment version ${current} with ${commitBasedBump}`);
+            return null;
+        }
+        core.debug(`Strategy 'apply-bump': Normal semver bump ${current} → ${nextVersion}`);
+        return nextVersion;
+    }
+}
+exports.ApplyBumpStrategy = ApplyBumpStrategy;
+//# sourceMappingURL=apply-bump.js.map
+
+/***/ }),
+
+/***/ 466:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.BaseVersionBumpStrategy = void 0;
+/**
+ * Abstract base class for version bump strategies.
+ * Implements the Strategy pattern for handling different version bumping approaches.
+ */
+class BaseVersionBumpStrategy {
+    name;
+    constructor(name) {
+        this.name = name;
+    }
+}
+exports.BaseVersionBumpStrategy = BaseVersionBumpStrategy;
+//# sourceMappingURL=base.js.map
+
+/***/ }),
+
+/***/ 206:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DoNothingStrategy = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const base_js_1 = __nccwpck_require__(466);
+/**
+ * Do-nothing strategy that skips version bumps when the same bump type is detected.
+ * This is useful when you want to prevent duplicate version bumps.
+ */
+class DoNothingStrategy extends base_js_1.BaseVersionBumpStrategy {
+    constructor() {
+        super('do-nothing');
+    }
+    execute(_currentVersion, _commitBasedBump, _historicalBump) {
+        core.debug(`Strategy 'do-nothing': Skipping bump`);
+        return null; // Explicitly return null to indicate no change
+    }
+}
+exports.DoNothingStrategy = DoNothingStrategy;
+//# sourceMappingURL=do-nothing.js.map
+
+/***/ }),
+
+/***/ 7317:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.VersionBumpStrategyFactory = void 0;
+const do_nothing_js_1 = __nccwpck_require__(206);
+const apply_bump_js_1 = __nccwpck_require__(7080);
+const pre_release_js_1 = __nccwpck_require__(4070);
+/**
+ * Factory class for creating version bump strategies.
+ * Implements the Factory pattern to provide strategy instances.
+ */
+class VersionBumpStrategyFactory {
+    static strategies = new Map([
+        ['do-nothing', new do_nothing_js_1.DoNothingStrategy()],
+        ['apply-bump', new apply_bump_js_1.ApplyBumpStrategy()],
+        ['pre-release', new pre_release_js_1.PreReleaseStrategy()],
+    ]);
+    /**
+     * Get a version bump strategy by name.
+     * @param strategyName - The name of the strategy to retrieve
+     * @returns The strategy instance
+     * @throws Error if the strategy is not found
+     */
+    static getStrategy(strategyName) {
+        const strategy = this.strategies.get(strategyName);
+        if (!strategy) {
+            throw new Error(`Unknown version bump strategy: ${strategyName}. Available strategies: ${this.getAvailableStrategies().join(', ')}`);
+        }
+        return strategy;
+    }
+    /**
+     * Get all available strategy names.
+     * @returns Array of available strategy names
+     */
+    static getAvailableStrategies() {
+        return Array.from(this.strategies.keys());
+    }
+    /**
+     * Check if a strategy exists.
+     * @param strategyName - The strategy name to check
+     * @returns True if the strategy exists
+     */
+    static hasStrategy(strategyName) {
+        return this.strategies.has(strategyName);
+    }
+}
+exports.VersionBumpStrategyFactory = VersionBumpStrategyFactory;
+//# sourceMappingURL=factory.js.map
+
+/***/ }),
+
+/***/ 4070:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PreReleaseStrategy = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const semver = __importStar(__nccwpck_require__(2088));
+const base_js_1 = __nccwpck_require__(466);
+/**
+ * Pre-release strategy that creates or increments prerelease versions.
+ * Handles the complex logic of transitioning between regular and prerelease versions.
+ */
+class PreReleaseStrategy extends base_js_1.BaseVersionBumpStrategy {
+    constructor() {
+        super('pre-release');
+    }
+    execute(currentVersion, commitBasedBump, _historicalBump) {
+        if (!commitBasedBump || !['major', 'minor', 'patch'].includes(commitBasedBump)) {
+            core.debug(`Strategy 'pre-release': No valid bump type provided: ${commitBasedBump}`);
+            return null;
+        }
+        const current = semver.coerce(currentVersion)?.toString() ?? '0.0.0';
+        if (semver.prerelease(current)) {
+            // Already a prerelease version, increment the prerelease number
+            const nextVersion = semver.inc(current, 'prerelease');
+            if (!nextVersion) {
+                core.warning(`Strategy 'pre-release': Failed to increment prerelease ${current}`);
+                return null;
+            }
+            core.debug(`Strategy 'pre-release': Increment prerelease ${current} → ${nextVersion}`);
+            return nextVersion; // 1.2.0-1 → 1.2.0-2
+        }
+        else {
+            // First time: apply bump then make prerelease
+            const bumped = semver.inc(current, commitBasedBump);
+            if (!bumped) {
+                core.warning(`Strategy 'pre-release': Failed to bump ${current} with ${commitBasedBump}`);
+                return null;
+            }
+            const nextVersion = semver.inc(bumped, 'prerelease', '0');
+            if (!nextVersion) {
+                core.warning(`Strategy 'pre-release': Failed to create prerelease from ${bumped}`);
+                return null;
+            }
+            core.debug(`Strategy 'pre-release': First prerelease ${current} → ${bumped} → ${nextVersion}`);
+            return nextVersion; // 1.1.0 → 1.2.0 → 1.2.0-0
+        }
+    }
+}
+exports.PreReleaseStrategy = PreReleaseStrategy;
+//# sourceMappingURL=pre-release.js.map
+
+/***/ }),
+
+/***/ 1279:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DEPENDENCY_KEYS = void 0;
+exports.isBumpType = isBumpType;
+exports.isStrategyName = isStrategyName;
+exports.isBranchCleanupStrategy = isBranchCleanupStrategy;
+exports.isGitOperationStrategyType = isGitOperationStrategyType;
+exports.isPackageManagerType = isPackageManagerType;
+// Constants
+exports.DEPENDENCY_KEYS = ['dependencies', 'devDependencies', 'peerDependencies'];
+// Type guards
+function isBumpType(value) {
+    return ['major', 'minor', 'patch', 'prerelease', 'release'].includes(value);
+}
+function isStrategyName(value) {
+    return ['do-nothing', 'apply-bump', 'pre-release'].includes(value);
+}
+function isBranchCleanupStrategy(value) {
+    return ['keep', 'prune', 'semantic'].includes(value);
+}
+function isGitOperationStrategyType(value) {
+    return ['conventional', 'simple'].includes(value);
+}
+function isPackageManagerType(value) {
+    return ['npm', 'yarn', 'pnpm'].includes(value);
+}
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 2365:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parseCommits = parseCommits;
+exports.getMostSignificantBump = getMostSignificantBump;
+exports.categorizeCommits = categorizeCommits;
+exports.summarizeCommits = summarizeCommits;
+const core = __importStar(__nccwpck_require__(7484));
+const conventional_commits_parser_1 = __importDefault(__nccwpck_require__(4375));
+/**
+ * Parse conventional commits from git log entries.
+ */
+function parseCommits(logEntries, sinceRef) {
+    const commits = [];
+    for (const entry of logEntries) {
+        const messageHeader = entry.message.split('\n')[0];
+        if (sinceRef && entry.hash === sinceRef) {
+            core.debug(`Skipping commit ${entry.hash} because it is the same as the sinceRef: ${messageHeader}`);
+            continue;
+        }
+        core.debug(`Parsing commit ${entry.hash}: ${messageHeader}`);
+        const parsed = conventional_commits_parser_1.default.sync(entry.message);
+        const breaking = Boolean((parsed.notes && parsed.notes.find(n => n.title === 'BREAKING CHANGE')) ||
+            (typeof parsed.header === 'string' && /!:/.test(parsed.header)));
+        commits.push({
+            type: parsed.type || null,
+            scope: parsed.scope || null,
+            subject: parsed.subject || null,
+            breaking,
+            header: parsed.header,
+        });
+    }
+    return commits;
+}
+/**
+ * Get the most significant bump type from a list of commits.
+ */
+function getMostSignificantBump(commits) {
+    let bump = 'patch';
+    for (const commit of commits) {
+        if (commit.breaking) {
+            return 'major'; // Breaking changes always result in major
+        }
+        if (commit.type === 'feat') {
+            bump = 'minor';
+        }
+    }
+    return commits.length > 0 ? bump : null;
+}
+/**
+ * Categorize commits by their type.
+ */
+function categorizeCommits(commits) {
+    return {
+        breaking: commits.filter(c => c.breaking),
+        features: commits.filter(c => c.type === 'feat' && !c.breaking),
+        fixes: commits.filter(c => c.type === 'fix' && !c.breaking),
+        other: commits.filter(c => !c.breaking && c.type !== 'feat' && c.type !== 'fix'),
+    };
+}
+/**
+ * Generate a summary of commit changes for logging.
+ */
+function summarizeCommits(commits) {
+    const categories = categorizeCommits(commits);
+    const parts = [];
+    if (categories.breaking.length > 0) {
+        parts.push(`${categories.breaking.length} breaking`);
+    }
+    if (categories.features.length > 0) {
+        parts.push(`${categories.features.length} features`);
+    }
+    if (categories.fixes.length > 0) {
+        parts.push(`${categories.fixes.length} fixes`);
+    }
+    if (categories.other.length > 0) {
+        parts.push(`${categories.other.length} other`);
+    }
+    return parts.join(', ') || 'no changes';
+}
+//# sourceMappingURL=commits.js.map
+
+/***/ }),
+
+/***/ 6959:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.setupGit = setupGit;
+exports.getCommitsAffecting = getCommitsAffecting;
+exports.pushChanges = pushChanges;
+exports.getBranches = getBranches;
+exports.deleteLocalBranch = deleteLocalBranch;
+const core = __importStar(__nccwpck_require__(7484));
+const simple_git_1 = __importDefault(__nccwpck_require__(9065));
+const node_path_1 = __importDefault(__nccwpck_require__(6760));
+const commits_js_1 = __nccwpck_require__(2365);
+const git = (0, simple_git_1.default)();
+/**
+ * Setup git configuration and checkout appropriate branch.
+ */
+async function setupGit(shouldCreateBranch, branchTemplate) {
+    // Configure git user
+    await git.addConfig('user.name', 'github-actions[bot]');
+    await git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com');
+    // Fetch latest changes
+    try {
+        core.debug(`[git] Fetching latest changes from origin`);
+        await git.fetch(['--prune', 'origin']);
+        core.debug(`[git] Successfully fetched from origin`);
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        core.warning(`[git] Failed to fetch from origin: ${errorMessage}`);
+    }
+    const currentBranch = process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || 'main';
+    const newBranch = shouldCreateBranch ? interpolateBranchTemplate(branchTemplate, { version: currentBranch }) : undefined;
+    try {
+        if (newBranch) {
+            core.info(`[git] Checking out ${newBranch} from ${currentBranch}`);
+            await git.checkoutBranch(newBranch, currentBranch);
+            core.debug(`[git] Successfully checked out ${newBranch}`);
+        }
+        else {
+            core.info(`[git] Checking out ${currentBranch}`);
+            await git.checkout(currentBranch);
+            core.debug(`[git] Successfully checked out ${currentBranch}`);
+        }
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        core.error(`[git] Failed to checkout branch: ${errorMessage}`);
+        throw new Error(`Failed to checkout branch: ${errorMessage}`);
+    }
+    return { currentBranch, newBranch };
+}
+/**
+ * Get commits affecting a specific directory since a reference point.
+ */
+async function getCommitsAffecting(dir, sinceRef) {
+    const range = sinceRef ? `${sinceRef}..HEAD` : 'HEAD';
+    const log = await git.log([range, '--', dir]);
+    const commits = (0, commits_js_1.parseCommits)([...log.all], sinceRef);
+    const relativePath = node_path_1.default.relative(process.cwd(), dir) || '/';
+    core.info(`[${relativePath}] ${commits.length} commits affecting since ${sinceRef}`);
+    return commits;
+}
+/**
+ * Push changes to remote repository.
+ */
+async function pushChanges(branch) {
+    try {
+        if (branch) {
+            core.info(`[git] Pushing ${branch} to origin`);
+            await git.push('origin', branch, ['--set-upstream', '--force']);
+            core.info(`[git] Successfully pushed ${branch}`);
+        }
+        else {
+            core.info(`[git] Pushing current branch and tags`);
+            await git.push();
+            await git.pushTags();
+            core.info(`[git] Successfully pushed changes and tags`);
+        }
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        core.error(`[git] Failed to push changes: ${errorMessage}`);
+        throw new Error(`Failed to push changes: ${errorMessage}`);
+    }
+}
+/**
+ * Get git branch information.
+ */
+async function getBranches() {
+    return await git.branch(['--list', '--remote']);
+}
+/**
+ * Delete a local branch safely.
+ */
+async function deleteLocalBranch(branchName, force = false) {
+    try {
+        await git.deleteLocalBranch(branchName, force);
+        core.debug(`[git] Successfully deleted local branch ${branchName}`);
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        core.warning(`[git] Failed to delete local branch ${branchName}: ${errorMessage}`);
+    }
+}
+/**
+ * Simple template interpolation for branch names.
+ */
+function interpolateBranchTemplate(template, vars) {
+    return template.replace(/\$\{(\w+)\}/g, (match, variableName) => {
+        const value = vars[variableName];
+        return value !== undefined ? String(value) : match;
+    });
+}
+//# sourceMappingURL=git.js.map
+
+/***/ }),
+
+/***/ 6693:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.interpolateTemplate = interpolateTemplate;
+exports.validateTemplate = validateTemplate;
+exports.extractTemplateVars = extractTemplateVars;
+/**
+ * Interpolate variables into a template string.
+ * Replaces ${variableName} patterns with corresponding values from the vars object.
+ *
+ * @param template - The template string containing ${variable} patterns
+ * @param vars - Object containing variable values
+ * @returns The interpolated string
+ *
+ * @example
+ * interpolateTemplate('Hello ${name}!', { name: 'World' }) // 'Hello World!'
+ */
+function interpolateTemplate(template, vars) {
+    return template.replace(/\$\{(\w+)\}/g, (match, variableName) => {
+        const value = vars[variableName];
+        return value !== undefined ? String(value) : match;
+    });
+}
+/**
+ * Validate that a template string contains only expected variable names.
+ *
+ * @param template - The template string to validate
+ * @param allowedVars - Array of allowed variable names
+ * @returns Array of invalid variable names found in the template
+ */
+function validateTemplate(template, allowedVars) {
+    const variableMatches = template.matchAll(/\$\{(\w+)\}/g);
+    const usedVars = Array.from(variableMatches, match => match[1]);
+    const allowedSet = new Set(allowedVars);
+    return usedVars.filter(varName => !allowedSet.has(varName));
+}
+/**
+ * Extract all variable names from a template string.
+ *
+ * @param template - The template string to analyze
+ * @returns Array of unique variable names found in the template
+ */
+function extractTemplateVars(template) {
+    const variableMatches = template.matchAll(/\$\{(\w+)\}/g);
+    const vars = Array.from(variableMatches, match => match[1]);
+    return Array.from(new Set(vars));
+}
+//# sourceMappingURL=template.js.map
+
+/***/ }),
+
+/***/ 6016:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ConfigurationValidationError = void 0;
+exports.validateConfiguration = validateConfiguration;
+exports.isNonEmptyString = isNonEmptyString;
+exports.isValidRegExp = isValidRegExp;
+exports.validateArray = validateArray;
+const index_js_1 = __nccwpck_require__(1279);
+/**
+ * Custom validation error class.
+ */
+class ConfigurationValidationError extends Error {
+    field;
+    value;
+    constructor(message, field, value) {
+        super(message);
+        this.field = field;
+        this.value = value;
+        this.name = 'ConfigurationValidationError';
+    }
+}
+exports.ConfigurationValidationError = ConfigurationValidationError;
+/**
+ * Validate action configuration inputs.
+ */
+function validateConfiguration(config) {
+    const errors = [];
+    // Validate strategy
+    if (config.strategy && !(0, index_js_1.isStrategyName)(config.strategy)) {
+        errors.push(new ConfigurationValidationError(`Invalid strategy: ${config.strategy}. Must be one of: do-nothing, apply-bump, pre-release`, 'strategy', config.strategy));
+    }
+    // Validate branch cleanup strategy
+    if (config.branchCleanup && !(0, index_js_1.isBranchCleanupStrategy)(config.branchCleanup)) {
+        errors.push(new ConfigurationValidationError(`Invalid branch cleanup strategy: ${config.branchCleanup}. Must be one of: keep, prune, semantic`, 'branchCleanup', config.branchCleanup));
+    }
+    // Validate branch names
+    if (config.activeBranch !== undefined && config.activeBranch.trim() === '') {
+        errors.push(new ConfigurationValidationError('branch cannot be empty if provided', 'activeBranch', config.activeBranch));
+    }
+    if (config.baseBranch !== undefined && config.baseBranch.trim() === '') {
+        errors.push(new ConfigurationValidationError('base cannot be empty if provided', 'baseBranch', config.baseBranch));
+    }
+    // Validate templates contain required variables
+    if (config.commitMsgTemplate) {
+        const requiredVars = ['package', 'version', 'bumpType'];
+        const templateVars = extractTemplateVars(config.commitMsgTemplate);
+        const missingVars = requiredVars.filter(v => !templateVars.includes(v));
+        if (missingVars.length > 0) {
+            errors.push(new ConfigurationValidationError(`Commit template missing required variables: ${missingVars.join(', ')}`, 'commitMsgTemplate', config.commitMsgTemplate));
+        }
+    }
+    if (config.depCommitMsgTemplate) {
+        const requiredVars = ['package', 'depPackage', 'depVersion'];
+        const templateVars = extractTemplateVars(config.depCommitMsgTemplate);
+        const missingVars = requiredVars.filter(v => !templateVars.includes(v));
+        if (missingVars.length > 0) {
+            errors.push(new ConfigurationValidationError(`Dependency commit template missing required variables: ${missingVars.join(', ')}`, 'depCommitMsgTemplate', config.depCommitMsgTemplate));
+        }
+    }
+    // Validate strategy compatibility
+    if (config.strategy === 'pre-release' && !config.baseBranch) {
+        // This is a warning, not an error
+        console.warn('Using pre-release strategy without base - prerelease finalization will not be available');
+    }
+    if (errors.length > 0) {
+        const errorMessage = errors.map(e => `${e.field}: ${e.message}`).join('; ');
+        throw new ConfigurationValidationError(`Configuration validation failed: ${errorMessage}`, 'configuration', config);
+    }
+    // Create default regex pattern
+    const templateRegex = new RegExp((config.branchTemplate || 'release/${version}').replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'));
+    // Return validated configuration with defaults
+    return {
+        commitMsgTemplate: config.commitMsgTemplate || 'chore(release): bump ${package} to ${version} (${bumpType})',
+        depCommitMsgTemplate: config.depCommitMsgTemplate || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)',
+        shouldCreateBranch: config.shouldCreateBranch || false,
+        branchTemplate: config.branchTemplate || 'release/${version}',
+        templateRegex,
+        branchCleanup: config.branchCleanup || 'keep',
+        baseBranch: config.baseBranch,
+        strategy: config.strategy || 'do-nothing',
+        activeBranch: config.activeBranch || 'develop',
+        tagPrereleases: config.tagPrereleases || false,
+    };
+}
+/**
+ * Extract template variables from a template string.
+ */
+function extractTemplateVars(template) {
+    const matches = template.matchAll(/\$\{(\w+)\}/g);
+    return Array.from(matches, match => match[1]);
+}
+/**
+ * Type guard to check if a value is a non-empty string.
+ */
+function isNonEmptyString(value) {
+    return typeof value === 'string' && value.trim().length > 0;
+}
+/**
+ * Type guard to check if a value is a valid RegExp.
+ */
+function isValidRegExp(value) {
+    return value instanceof RegExp;
+}
+/**
+ * Validate an array contains only valid elements.
+ */
+function validateArray(array, validator, fieldName) {
+    const validItems = [];
+    const invalidItems = [];
+    for (const item of array) {
+        if (validator(item)) {
+            validItems.push(item);
+        }
+        else {
+            invalidItems.push(item);
+        }
+    }
+    if (invalidItems.length > 0) {
+        throw new ConfigurationValidationError(`Invalid items in ${fieldName}: ${JSON.stringify(invalidItems)}`, fieldName, invalidItems);
+    }
+    return validItems;
+}
+//# sourceMappingURL=validation.js.map
+
+/***/ }),
+
+/***/ 611:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.guessBumpType = guessBumpType;
+exports.initializeVersion = initializeVersion;
+exports.calculateBumpType = calculateBumpType;
+exports.finalizeVersion = finalizeVersion;
+exports.bumpPriority = bumpPriority;
+exports.getMostSignificantBumpType = getMostSignificantBumpType;
+const semver = __importStar(__nccwpck_require__(2088));
+/**
+ * Guess the bump type based on version string patterns.
+ * @param version - The version string to analyze
+ * @returns The guessed bump type
+ */
+function guessBumpType(version) {
+    if (version.endsWith('.0.0')) {
+        return 'major';
+    }
+    if (version.endsWith('.0')) {
+        return 'minor';
+    }
+    return 'patch';
+}
+/**
+ * Initialize a version if it's missing or invalid.
+ * @param version - The version to initialize
+ * @returns A valid version string
+ */
+function initializeVersion(version) {
+    return semver.coerce(version)?.toString() ?? '0.0.0';
+}
+/**
+ * Calculate the bump type between two versions.
+ * @param fromVersion - The starting version
+ * @param toVersion - The target version
+ * @returns The bump type or null if no change
+ */
+function calculateBumpType(fromVersion, toVersion) {
+    const from = semver.coerce(fromVersion)?.toString() ?? '0.0.0';
+    const to = semver.coerce(toVersion)?.toString() ?? '0.0.0';
+    const diff = semver.diff(from, to);
+    if (!diff) {
+        return null;
+    }
+    // Map semver.diff results to our BumpType
+    switch (diff) {
+        case 'major':
+        case 'minor':
+        case 'patch':
+            return diff;
+        case 'prerelease':
+        case 'prepatch':
+        case 'preminor':
+        case 'premajor':
+            return 'prerelease';
+        default:
+            return null;
+    }
+}
+/**
+ * Finalize a prerelease version by removing the prerelease suffix.
+ * @param version - The prerelease version to finalize
+ * @returns The finalized version
+ */
+function finalizeVersion(version) {
+    const current = semver.coerce(version)?.toString() ?? '0.0.0';
+    if (semver.prerelease(current)) {
+        const parsed = semver.parse(current);
+        if (parsed) {
+            return `${parsed.major}.${parsed.minor}.${parsed.patch}`;
+        }
+    }
+    return current;
+}
+/**
+ * Get the priority of a bump type for comparison.
+ * @param bumpType - The bump type to get priority for
+ * @returns Numeric priority (higher = more significant)
+ */
+function bumpPriority(bumpType) {
+    switch (bumpType) {
+        case 'major':
+            return 3;
+        case 'minor':
+            return 2;
+        case 'patch':
+            return 1;
+        case 'prerelease':
+        case 'release':
+            return 0;
+        case null:
+            return -1;
+        default:
+            return -1;
+    }
+}
+/**
+ * Get the most significant bump type from an array of bump types.
+ * @param bumpTypes - Array of bump types to compare
+ * @returns The most significant bump type
+ */
+function getMostSignificantBumpType(bumpTypes) {
+    return bumpTypes.reduce((most, current) => {
+        return bumpPriority(current) > bumpPriority(most) ? current : most;
+    }, null);
+}
+//# sourceMappingURL=version.js.map
+
+/***/ }),
+
+/***/ 3771:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getNextVersion = getNextVersion;
+exports.validateVersion = validateVersion;
+exports.compareVersions = compareVersions;
+exports.satisfiesRange = satisfiesRange;
+exports.parseVersionComponents = parseVersionComponents;
+exports.cleanVersion = cleanVersion;
+exports.isPrerelease = isPrerelease;
+exports.getReleaseVersion = getReleaseVersion;
+const core = __importStar(__nccwpck_require__(7484));
+const semver = __importStar(__nccwpck_require__(2088));
+const factory_js_1 = __nccwpck_require__(7317);
+/**
+ * Get the next version based on current version, bump types, and strategy.
+ */
+function getNextVersion(currentVersion, commitBasedBump, historicalBump, strategyName = 'do-nothing') {
+    const current = semver.coerce(currentVersion)?.toString() ?? '0.0.0';
+    // Validate inputs
+    if (commitBasedBump && !['major', 'minor', 'patch'].includes(commitBasedBump)) {
+        throw new Error(`Invalid commitBasedBump: ${commitBasedBump}`);
+    }
+    if (commitBasedBump === historicalBump) {
+        // Same bump type - use configured strategy
+        core.debug(`Same bump type detected (${commitBasedBump}), using strategy: ${strategyName}`);
+        const strategy = factory_js_1.VersionBumpStrategyFactory.getStrategy(strategyName);
+        const nextVersion = strategy.execute(currentVersion, commitBasedBump, historicalBump);
+        // Handle do-nothing strategy return value
+        if (nextVersion === null && strategyName === 'do-nothing') {
+            return null; // Skip bump
+        }
+        return nextVersion;
+    }
+    else if (commitBasedBump) {
+        // Different bump type - normal semver bump (always apply)
+        const nextVersion = semver.inc(current, commitBasedBump);
+        core.debug(`Different bump type: ${current} → ${nextVersion} (${commitBasedBump})`);
+        return nextVersion;
+    }
+    return null; // No bump needed
+}
+/**
+ * Validate version string using semver.
+ */
+function validateVersion(version) {
+    return semver.valid(version) !== null;
+}
+/**
+ * Compare two versions and return the relationship.
+ */
+function compareVersions(version1, version2) {
+    return semver.compare(version1, version2);
+}
+/**
+ * Check if a version satisfies a range specification.
+ */
+function satisfiesRange(version, range) {
+    return semver.satisfies(version, range);
+}
+/**
+ * Get the major, minor, and patch components of a version.
+ */
+function parseVersionComponents(version) {
+    const parsed = semver.parse(version);
+    if (!parsed)
+        return null;
+    return {
+        major: parsed.major,
+        minor: parsed.minor,
+        patch: parsed.patch,
+        prerelease: parsed.prerelease.map(String),
+    };
+}
+/**
+ * Create a clean version string from any input.
+ */
+function cleanVersion(version) {
+    return semver.clean(version) ?? '0.0.0';
+}
+/**
+ * Check if a version is a prerelease.
+ */
+function isPrerelease(version) {
+    const parsed = semver.parse(version);
+    return Boolean(parsed?.prerelease.length);
+}
+/**
+ * Get the release version from a prerelease version.
+ */
+function getReleaseVersion(version) {
+    const parsed = semver.parse(version);
+    if (!parsed)
+        return version;
+    return `${parsed.major}.${parsed.minor}.${parsed.patch}`;
+}
+//# sourceMappingURL=versioning.js.map
+
+/***/ }),
+
+/***/ 1622:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.readJSON = readJSON;
+exports.writeJSON = writeJSON;
+exports.getPackageDirs = getPackageDirs;
+exports.buildDepGraph = buildDepGraph;
+exports.topoSort = topoSort;
+exports.createWorkspacePackages = createWorkspacePackages;
+exports.isPackageDirectory = isPackageDirectory;
+exports.findRootPackage = findRootPackage;
+exports.isMonorepo = isMonorepo;
+exports.getWorkspacePackageCount = getWorkspacePackageCount;
+const promises_1 = __nccwpck_require__(1455);
+const node_path_1 = __importDefault(__nccwpck_require__(6760));
+const glob_1 = __nccwpck_require__(1363);
+const package_js_1 = __nccwpck_require__(9138);
+/**
+ * Read and parse a JSON file.
+ */
+async function readJSON(filePath) {
+    const content = await (0, promises_1.readFile)(filePath, 'utf8');
+    return JSON.parse(content);
+}
+/**
+ * Write a JSON object to a file with proper formatting.
+ */
+async function writeJSON(filePath, data) {
+    const content = `${JSON.stringify(data, null, 2)}\n`;
+    await (__nccwpck_require__(1455).writeFile)(filePath, content, 'utf8');
+}
+/**
+ * Get package directories from workspace configuration.
+ */
+async function getPackageDirs(rootPkg) {
+    if (rootPkg.workspaces) {
+        // Support both array and object form
+        const patterns = Array.isArray(rootPkg.workspaces)
+            ? rootPkg.workspaces
+            : rootPkg.workspaces.packages;
+        const dirs = new Set();
+        for (const pattern of patterns) {
+            const matches = await (0, glob_1.glob)(pattern, {
+                cwd: process.cwd(),
+                absolute: true,
+            });
+            for (const match of matches) {
+                // Only include dirs with package.json
+                try {
+                    await (0, promises_1.access)(node_path_1.default.join(match, 'package.json'));
+                    dirs.add(node_path_1.default.resolve(match));
+                }
+                catch {
+                    // Directory doesn't contain package.json, skip it
+                }
+            }
+        }
+        return Array.from(dirs);
+    }
+    else {
+        // Single package repository
+        return [process.cwd()];
+    }
+}
+/**
+ * Build a dependency graph for workspace packages.
+ */
+async function buildDepGraph(pkgDirs) {
+    const graph = {};
+    const nameToDir = {};
+    // First pass: read all packages
+    for (const dir of pkgDirs) {
+        const pkg = await readJSON(node_path_1.default.join(dir, 'package.json'));
+        graph[pkg.name] = { dir, deps: [], pkg };
+        nameToDir[pkg.name] = dir;
+    }
+    // Second pass: build dependency relationships
+    for (const name in graph) {
+        const { pkg } = graph[name];
+        const allDeps = {
+            ...pkg.dependencies,
+            ...pkg.devDependencies,
+            ...pkg.peerDependencies,
+        };
+        const deps = [];
+        for (const depName in allDeps) {
+            if (graph[depName]) {
+                deps.push(depName);
+            }
+        }
+        graph[name] = { ...graph[name], deps };
+    }
+    return { graph, nameToDir };
+}
+/**
+ * Topologically sort packages based on their dependencies.
+ */
+function topoSort(graph) {
+    const visited = new Set();
+    const order = [];
+    function visit(name) {
+        if (visited.has(name)) {
+            return;
+        }
+        visited.add(name);
+        const node = graph[name];
+        if (node) {
+            for (const dep of node.deps) {
+                visit(dep);
+            }
+        }
+        order.push(name);
+    }
+    for (const name in graph) {
+        visit(name);
+    }
+    return order;
+}
+/**
+ * Create Package instances from workspace discovery.
+ */
+async function createWorkspacePackages(rootPkg) {
+    const pkgDirs = await getPackageDirs(rootPkg);
+    const { graph } = await buildDepGraph(pkgDirs);
+    const order = topoSort(graph);
+    const packages = await Promise.all(order.map(async (name) => {
+        const { dir, pkg } = graph[name];
+        const packageJsonPath = node_path_1.default.join(dir, 'package.json');
+        return new package_js_1.Package(name, dir, pkg, packageJsonPath);
+    }));
+    return packages;
+}
+/**
+ * Check if a directory is a valid package directory.
+ */
+async function isPackageDirectory(dir) {
+    try {
+        const packageJsonPath = node_path_1.default.join(dir, 'package.json');
+        await (0, promises_1.access)(packageJsonPath);
+        // Try to read and parse the package.json
+        const pkg = await readJSON(packageJsonPath);
+        return typeof pkg.name === 'string' && pkg.name.length > 0;
+    }
+    catch {
+        return false;
+    }
+}
+/**
+ * Find the root package.json file.
+ */
+async function findRootPackage() {
+    const rootPath = node_path_1.default.join(process.cwd(), 'package.json');
+    const pkg = await readJSON(rootPath);
+    return { pkg, path: rootPath };
+}
+/**
+ * Check if the workspace is a monorepo.
+ */
+function isMonorepo(rootPkg) {
+    return Boolean(rootPkg.workspaces);
+}
+/**
+ * Get workspace package count.
+ */
+async function getWorkspacePackageCount(rootPkg) {
+    if (!isMonorepo(rootPkg)) {
+        return 1; // Single package
+    }
+    const pkgDirs = await getPackageDirs(rootPkg);
+    return pkgDirs.length;
+}
+//# sourceMappingURL=workspace.js.map
+
+/***/ }),
 
 /***/ 4914:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
@@ -4462,7 +8046,7 @@ function localstorage() {
 	}
 }
 
-module.exports = __nccwpck_require__(3278)(exports);
+module.exports = __nccwpck_require__(897)(exports);
 
 const {formatters} = module.exports;
 
@@ -4481,7 +8065,7 @@ formatters.j = function (v) {
 
 /***/ }),
 
-/***/ 3278:
+/***/ 897:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -5039,7 +8623,7 @@ function init(debug) {
 	}
 }
 
-module.exports = __nccwpck_require__(3278)(exports);
+module.exports = __nccwpck_require__(897)(exports);
 
 const {formatters} = module.exports;
 
@@ -12884,6 +16468,14 @@ var { esModuleFactory: esModuleFactory2, gitInstanceFactory: gitInstanceFactory2
 var simpleGit = esModuleFactory2(gitExportFactory2(gitInstanceFactory2));
 module.exports = Object.assign(simpleGit, { gitP: gitP2, simpleGit });
 //# sourceMappingURL=index.js.map
+
+
+/***/ }),
+
+/***/ 7959:
+/***/ ((__unused_webpack_module, __unused_webpack_exports, __nccwpck_require__) => {
+
+(__nccwpck_require__(3622).install)();
 
 
 /***/ }),
@@ -39462,14 +43054,6 @@ module.exports = require("node:path");
 
 /***/ }),
 
-/***/ 1708:
-/***/ ((module) => {
-
-"use strict";
-module.exports = require("node:process");
-
-/***/ }),
-
 /***/ 7075:
 /***/ ((module) => {
 
@@ -45592,7 +49176,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PathScurry = exports.Path = exports.PathScurryDarwin = exports.PathScurryPosix = exports.PathScurryWin32 = exports.PathScurryBase = exports.PathPosix = exports.PathWin32 = exports.PathBase = exports.ChildrenCache = exports.ResolveCache = void 0;
-const lru_cache_1 = __nccwpck_require__(897);
+const lru_cache_1 = __nccwpck_require__(3278);
 const node_path_1 = __nccwpck_require__(6760);
 const node_url_1 = __nccwpck_require__(3136);
 const fs_1 = __nccwpck_require__(9896);
@@ -47583,7 +51167,7 @@ exports.PathScurry = process.platform === 'win32' ? PathScurryWin32
 
 /***/ }),
 
-/***/ 897:
+/***/ 3278:
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
@@ -49134,770 +52718,6 @@ class LRUCache {
 exports.LRUCache = LRUCache;
 //# sourceMappingURL=index.js.map
 
-/***/ }),
-
-/***/ 3298:
-/***/ ((module) => {
-
-// Base class for git operation strategies
-class GitOperationStrategy {
-  constructor(name) {
-    this.name = name
-  }
-
-  async commitVersionChange(_packageDir, _packageName, _version, _bumpType, _template) {
-    throw new Error('Strategy must implement commitVersionChange method')
-  }
-
-  async commitDependencyUpdate(_packageDir, _packageName, _depName, _depVersion, _template) {
-    throw new Error('Strategy must implement commitDependencyUpdate method')
-  }
-
-  async tagVersion(_version, _isPrerelease, _shouldTag) {
-    throw new Error('Strategy must implement tagVersion method')
-  }
-}
-
-module.exports = { GitOperationStrategy }
-
-
-/***/ }),
-
-/***/ 9177:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const core = __nccwpck_require__(7484)
-const semver = __nccwpck_require__(2088)
-const simpleGit = (__nccwpck_require__(9065)["default"])
-
-class BranchDiscoveryStrategy {
-  constructor() {
-    this.name = 'branch-based'
-  }
-
-  async findReferencePoint(baseBranch, activeBranch) {
-    core.info(`[${this.name}] Using branch base: ${baseBranch}`)
-    const git = simpleGit()
-    const branch = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`
-    let referenceCommit = await this.lastNonMergeCommit(git, branch)
-    referenceCommit = referenceCommit.trim()
-
-    // Get root package version at that commit
-    const rootPackageJsonPath = (__nccwpck_require__(6760).join)((__nccwpck_require__(1708).cwd)(), 'package.json')
-    let referenceVersion = await this.getVersionAtCommit(referenceCommit)
-    referenceVersion = String(semver.coerce(referenceVersion) || '0.0.0')
-
-    // Check if we should finalize prerelease versions or force bumps (base branch update scenario)
-    let shouldFinalizeVersions = false
-    let shouldForceBump = false
-    if (baseBranch && activeBranch) {
-      try {
-        const activeCommit = await this.lastNonMergeCommit(git, `origin/${activeBranch}`)
-        const baseCommit = await this.lastNonMergeCommit(git, `origin/${baseBranch}`)
-
-        if (activeCommit === baseCommit) {
-          core.info(`[${this.name}] Active and base branches are at same commit - assuming bump is requested if changes exist`)
-          shouldFinalizeVersions = true
-          shouldForceBump = true
-        }
-      }
-      catch (error) {
-        core.debug(`Could not compare active/base branches: ${error.message}`)
-      }
-    }
-
-    return { referenceCommit, referenceVersion, shouldFinalizeVersions, shouldForceBump }
-  }
-
-  async findLastVersionChangeCommit(packageJsonPath) {
-    const git = simpleGit()
-
-    // Find the last commit that changed the version in package.json
-    try {
-      const log = await git.log(['--follow', '--format=%H', '--', packageJsonPath])
-      if (log.latest) {
-        return log.latest.hash
-      }
-      throw new Error('No commits found that modified package.json')
-    }
-    catch (error) {
-      core.debug(`Could not find last version change commit: ${error.message}`)
-    }
-
-    // Fallback: find the last commit with a version bump message
-    try {
-      const log = await git.log(['--grep=chore(release)', '--grep=bump', '--grep=version', '--format=%H', '-1'])
-      if (log.latest) {
-        return log.latest.hash
-      }
-      throw new Error('No version bump commits found')
-    }
-    catch (error) {
-      core.debug(`Could not find last version bump commit: ${error.message}`)
-    }
-
-    throw new Error('Could not determine last version change commit - no fallback available')
-  }
-
-  async getVersionAtCommit(commitRef) {
-    const git = simpleGit()
-    const fs = __nccwpck_require__(1455)
-    const path = __nccwpck_require__(6760)
-
-    try {
-      // Checkout the specific commit temporarily to read package.json
-      const currentBranch = await git.branch()
-      await git.checkout(commitRef)
-
-      const packageJsonPath = path.join(process.cwd(), 'package.json')
-      const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'))
-      const version = packageJson.version || '0.0.0'
-
-      // Restore original branch
-      await git.checkout(currentBranch.current)
-
-      return version
-    }
-    catch (error) {
-      core.debug(`Could not get version at commit ${commitRef}: ${error.message}`)
-      throw new Error(`Failed to get version at commit ${commitRef}: ${error.message}`)
-    }
-  }
-
-  async lastNonMergeCommit(git, branch) {
-    try {
-      core.debug(`Getting last non-merge commit from branch: ${branch}`)
-      const commits = await git.log(['--no-merges', '-n1', branch])
-      if (!commits.latest) {
-        throw new Error(`No commits found in branch ${branch}`)
-      }
-      core.debug(`Last non-merge commit in ${branch}: ${commits.latest.hash}`)
-      return commits.latest.hash
-    }
-    catch (error) {
-      core.error(`Failed to get last non-merge commit from ${branch}: ${error.message}`)
-      throw new Error(`Failed to get last non-merge commit from ${branch}: ${error.message}`)
-    }
-  }
-}
-
-module.exports = { BranchDiscoveryStrategy } 
-
-/***/ }),
-
-/***/ 9507:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const path = __nccwpck_require__(6760)
-const core = __nccwpck_require__(7484)
-const { GitOperationStrategy } = __nccwpck_require__(3298)
-
-class ConventionalCommitStrategy extends GitOperationStrategy {
-  constructor() {
-    super('conventional')
-  }
-
-  async commitVersionChange(packageDir, packageName, version, bumpType, template) {
-    const relativePath = path.relative(process.cwd(), packageDir) || '.'
-    const packageJsonPath = path.join(packageDir, 'package.json')
-
-    // Create conventional commit message
-    const msg = this.interpolate(template, {
-      package: packageName,
-      version,
-      bumpType,
-    })
-
-    try {
-      const git = __nccwpck_require__(9065)()
-
-      core.debug(`[${relativePath}] Adding package.json to git`)
-      await git.add([packageJsonPath])
-
-      core.debug(`[${relativePath}] Committing: ${msg}`)
-      await git.commit(msg)
-
-      core.debug(`[${relativePath}] Successfully committed version change`)
-    }
-    catch (error) {
-      core.error(`[${relativePath}] Failed to commit version change: ${error.message}`)
-      throw new Error(`Failed to commit version change in ${relativePath}: ${error.message}`)
-    }
-  }
-
-  async commitDependencyUpdate(packageDir, packageName, depName, depVersion, template) {
-    const relativePath = path.relative(process.cwd(), packageDir) || '.'
-    const packageJsonPath = path.join(packageDir, 'package.json')
-
-    const msg = this.interpolate(template, {
-      package: packageName,
-      depPackage: depName,
-      depVersion,
-      version: 'unknown', // We don't always have current version context
-      bumpType: 'patch',
-    })
-
-    try {
-      const git = __nccwpck_require__(9065)()
-
-      core.debug(`[${relativePath}] Adding package.json to git`)
-      await git.add([packageJsonPath])
-
-      core.debug(`[${relativePath}] Committing: ${msg}`)
-      await git.commit(msg)
-
-      core.debug(`[${relativePath}] Successfully committed dependency update`)
-    }
-    catch (error) {
-      core.error(`[${relativePath}] Failed to commit dependency update: ${error.message}`)
-      throw new Error(`Failed to commit dependency update in ${relativePath}: ${error.message}`)
-    }
-  }
-
-  async tagVersion(version, isPrerelease, shouldTag) {
-    const tagName = `v${version}`
-    const git = __nccwpck_require__(9065)()
-
-    if (!version) {
-      core.warning('No version found, skipping tag')
-      return
-    }
-
-    if (isPrerelease && !shouldTag) {
-      core.info(`Skipping prerelease tag ${tagName} (use tag-prereleases: true to enable)`)
-      return
-    }
-
-    try {
-      const existingTags = await git.tags()
-      if (existingTags.all.includes(tagName)) {
-        core.info(`Skipping tag ${tagName} because it already exists`)
-        return
-      }
-
-      if (isPrerelease) {
-        core.info(`Creating prerelease tag ${tagName}`)
-      }
-      else {
-        core.info(`Creating release tag ${tagName}`)
-      }
-
-      await git.addAnnotatedTag(tagName, `Release ${version}`)
-    }
-    catch (error) {
-      core.error(`Failed to create tag ${tagName}: ${error.message}`)
-      throw new Error(`Failed to create tag ${tagName}: ${error.message}`)
-    }
-  }
-
-  interpolate(template, vars) {
-    return template.replace(/\$\{(\w+)\}/g, (_, v) => vars[v] ?? '')
-  }
-}
-
-module.exports = { ConventionalCommitStrategy }
-
-
-/***/ }),
-
-/***/ 9340:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const core = __nccwpck_require__(7484)
-const { TagDiscoveryStrategy } = __nccwpck_require__(2283)
-const { BranchDiscoveryStrategy } = __nccwpck_require__(9177)
-
-class DiscoveryStrategyFactory {
-  static strategies = {
-    'tag-based': new TagDiscoveryStrategy(),
-    'branch-based': new BranchDiscoveryStrategy(),
-  }
-
-  static getStrategy(baseBranch) {
-    if (baseBranch) {
-      return this.strategies['branch-based']
-    }
-    else {
-      return this.strategies['tag-based']
-    }
-  }
-
-  static getAvailableStrategies() {
-    return Object.keys(this.strategies)
-  }
-}
-
-module.exports = { DiscoveryStrategyFactory } 
-
-/***/ }),
-
-/***/ 5725:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const core = __nccwpck_require__(7484)
-const { ConventionalCommitStrategy } = __nccwpck_require__(9507)
-const { SimpleCommitStrategy } = __nccwpck_require__(3235)
-
-class GitOperationStrategyFactory {
-  static strategies = {
-    conventional: new ConventionalCommitStrategy(),
-    simple: new SimpleCommitStrategy(),
-  }
-
-  static getStrategy(strategyName = 'conventional') {
-    const strategy = this.strategies[strategyName]
-    if (!strategy) {
-      core.warning(`Unknown git strategy: ${strategyName}, falling back to conventional`)
-      return this.strategies.conventional
-    }
-    return strategy
-  }
-
-  static getAvailableStrategies() {
-    return Object.keys(this.strategies)
-  }
-}
-
-module.exports = { GitOperationStrategyFactory }
-
-
-/***/ }),
-
-/***/ 3235:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const path = __nccwpck_require__(6760)
-const core = __nccwpck_require__(7484)
-const { GitOperationStrategy } = __nccwpck_require__(3298)
-
-class SimpleCommitStrategy extends GitOperationStrategy {
-  constructor() {
-    super('simple')
-  }
-
-  async commitVersionChange(packageDir, packageName, version, _bumpType, _template) {
-    const relativePath = path.relative(process.cwd(), packageDir) || '.'
-    const packageJsonPath = path.join(packageDir, 'package.json')
-
-    // Simple commit message
-    const msg = `Bump ${packageName} to ${version}`
-
-    try {
-      const git = __nccwpck_require__(9065)()
-
-      await git.add([packageJsonPath])
-      await git.commit(msg)
-      core.debug(`[${relativePath}] Successfully committed simple version change`)
-    }
-    catch (error) {
-      throw new Error(`Failed to commit version change in ${relativePath}: ${error.message}`)
-    }
-  }
-
-  async commitDependencyUpdate(packageDir, packageName, depName, depVersion, _template) {
-    const relativePath = path.relative(process.cwd(), packageDir) || '.'
-    const packageJsonPath = path.join(packageDir, 'package.json')
-
-    const msg = `Update ${depName} to ${depVersion} in ${packageName}`
-
-    try {
-      const git = __nccwpck_require__(9065)()
-
-      await git.add([packageJsonPath])
-      await git.commit(msg)
-      core.debug(`[${relativePath}] Successfully committed simple dependency update`)
-    }
-    catch (error) {
-      throw new Error(`Failed to commit dependency update in ${relativePath}: ${error.message}`)
-    }
-  }
-
-  async tagVersion(version, isPrerelease, shouldTag) {
-    if (!version || (isPrerelease && !shouldTag))
-      return
-
-    const tagName = `v${version}`
-    const git = __nccwpck_require__(9065)()
-
-    try {
-      await git.addTag(tagName)
-      core.info(`Created simple tag ${tagName}`)
-    }
-    catch (error) {
-      core.error(`Failed to create tag ${tagName}: ${error.message}`)
-    }
-  }
-}
-
-module.exports = { SimpleCommitStrategy }
-
-
-/***/ }),
-
-/***/ 2283:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const core = __nccwpck_require__(7484)
-const semver = __nccwpck_require__(2088)
-const simpleGit = (__nccwpck_require__(9065)["default"])
-
-class TagDiscoveryStrategy {
-  constructor() {
-    this.name = 'tag-based'
-  }
-
-  async findReferencePoint() {
-    core.info(`[${this.name}] Using latest tag as reference`)
-    const git = simpleGit()
-    const tags = await git.tags(['--sort=-v:refname'])
-    const latestTag = tags.latest
-
-    if (latestTag) {
-      const referenceCommit = await git.revparse([latestTag])
-      const referenceVersion = String(semver.coerce(latestTag.replace(/^v/, '')) || '0.0.0')
-      return {
-        referenceCommit,
-        referenceVersion,
-        shouldFinalizeVersions: false,
-        shouldForceBump: false
-      }
-    }
-    else {
-      // No tags, use first commit
-      const firstCommit = await git.log(['--reverse', '--max-count=1'])
-      if (!firstCommit.latest) {
-        throw new Error('No commits found in repository')
-      }
-      const referenceCommit = firstCommit.latest.hash
-      const referenceVersion = '0.0.0'
-      return {
-        referenceCommit,
-        referenceVersion,
-        shouldFinalizeVersions: false,
-        shouldForceBump: false
-      }
-    }
-  }
-
-  async findLastVersionChangeCommit(packageJsonPath) {
-    const git = simpleGit()
-
-    // Find the last commit that changed the version in package.json
-    try {
-      const log = await git.log(['--follow', '--format=%H', '--', packageJsonPath])
-      if (log.latest) {
-        return log.latest.hash
-      }
-      throw new Error('No commits found that modified package.json')
-    }
-    catch (error) {
-      core.debug(`Could not find last version change commit: ${error.message}`)
-    }
-
-    // Fallback: find the last commit with a version bump message
-    try {
-      const log = await git.log(['--grep=chore(release)', '--grep=bump', '--grep=version', '--format=%H', '-1'])
-      if (log.latest) {
-        return log.latest.hash
-      }
-      throw new Error('No version bump commits found')
-    }
-    catch (error) {
-      core.debug(`Could not find last version bump commit: ${error.message}`)
-    }
-
-    throw new Error('Could not determine last version change commit - no fallback available')
-  }
-
-  async getVersionAtCommit(commitRef) {
-    const git = simpleGit()
-    const fs = __nccwpck_require__(1455)
-    const path = __nccwpck_require__(6760)
-
-    try {
-      // Checkout the specific commit temporarily to read package.json
-      const currentBranch = await git.branch()
-      await git.checkout(commitRef)
-
-      const packageJsonPath = path.join(process.cwd(), 'package.json')
-      const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf8'))
-      const version = packageJson.version || '0.0.0'
-
-      // Restore original branch
-      await git.checkout(currentBranch.current)
-
-      return version
-    }
-    catch (error) {
-      core.debug(`Could not get version at commit ${commitRef}: ${error.message}`)
-      throw new Error(`Failed to get version at commit ${commitRef}: ${error.message}`)
-    }
-  }
-}
-
-module.exports = { TagDiscoveryStrategy } 
-
-/***/ }),
-
-/***/ 1124:
-/***/ ((__unused_webpack_module, exports) => {
-
-// Base class for package manager strategies
-class PackageManagerStrategy {
-  constructor(name) {
-    this.name = name
-  }
-
-  isAvailable() {
-    throw new Error('Strategy must implement isAvailable method')
-  }
-
-  async install(_packageDir = '.') {
-    throw new Error('Strategy must implement install method')
-  }
-
-  async test(_packageDir = '.') {
-    throw new Error('Strategy must implement test method')
-  }
-
-  async build(_packageDir = '.') {
-    throw new Error('Strategy must implement build method')
-  }
-
-  getInstallCommand(_packageDir = '.') {
-    throw new Error('Strategy must implement getInstallCommand method')
-  }
-
-  getTestCommand(_packageDir = '.') {
-    throw new Error('Strategy must implement getTestCommand method')
-  }
-}
-
-exports.PackageManagerStrategy = PackageManagerStrategy
-
-
-/***/ }),
-
-/***/ 3451:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const { NpmPackageManagerStrategy } = __nccwpck_require__(1218)
-const { PnpmPackageManagerStrategy } = __nccwpck_require__(9008)
-const { YarnPackageManagerStrategy } = __nccwpck_require__(3869)
-
-class PackageManagerFactory {
-  static strategies = [
-    new YarnPackageManagerStrategy(),
-    new PnpmPackageManagerStrategy(),
-    new NpmPackageManagerStrategy(), // NPM as fallback
-  ]
-
-  static getPackageManager() {
-    for (const strategy of this.strategies) {
-      if (strategy.isAvailable()) {
-        return strategy
-      }
-    }
-    return new NpmPackageManagerStrategy() // Default fallback
-  }
-}
-
-module.exports = { PackageManagerFactory }
-
-
-/***/ }),
-
-/***/ 1218:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const path = __nccwpck_require__(6760)
-const core = __nccwpck_require__(7484)
-const { PackageManagerStrategy } = __nccwpck_require__(1124)
-
-class NpmPackageManagerStrategy extends PackageManagerStrategy {
-  constructor() {
-    super('npm')
-  }
-
-  isAvailable() {
-    try {
-      const fs = __nccwpck_require__(3024)
-      return fs.existsSync(path.join((__nccwpck_require__(1708).cwd)(), 'package-lock.json'))
-        || !fs.existsSync(path.join((__nccwpck_require__(1708).cwd)(), 'yarn.lock'))
-    }
-    catch {
-      return true // NPM is default fallback
-    }
-  }
-
-  async install(packageDir = '.') {
-    const { execSync } = __nccwpck_require__(1421)
-    const command = `cd ${packageDir} && npm install`
-    core.debug(`[${this.name}] Running: ${command}`)
-    return execSync(command, { stdio: 'inherit' })
-  }
-
-  async test(packageDir = '.') {
-    const { execSync } = __nccwpck_require__(1421)
-    try {
-      const command = `cd ${packageDir} && npm test`
-      core.debug(`[${this.name}] Running: ${command}`)
-      execSync(command, { stdio: 'inherit' })
-      return { success: true }
-    }
-    catch (error) {
-      core.warning(`[${this.name}] Tests failed: ${error.message}`)
-      return { success: false, error: error.message }
-    }
-  }
-
-  async build(packageDir = '.') {
-    const { execSync } = __nccwpck_require__(1421)
-    const command = `cd ${packageDir} && npm run build`
-    core.debug(`[${this.name}] Running: ${command}`)
-    return execSync(command, { stdio: 'inherit' })
-  }
-
-  getInstallCommand(packageDir = '.') {
-    return `cd ${packageDir} && npm install`
-  }
-
-  getTestCommand(packageDir = '.') {
-    return `cd ${packageDir} && npm test`
-  }
-}
-
-module.exports = { NpmPackageManagerStrategy }
-
-
-/***/ }),
-
-/***/ 9008:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const path = __nccwpck_require__(6760)
-const core = __nccwpck_require__(7484)
-const { PackageManagerStrategy } = __nccwpck_require__(1124)
-
-class PnpmPackageManagerStrategy extends PackageManagerStrategy {
-  constructor() {
-    super('pnpm')
-  }
-
-  isAvailable() {
-    try {
-      const fs = __nccwpck_require__(3024)
-      return fs.existsSync(path.join((__nccwpck_require__(1708).cwd)(), 'pnpm-lock.yaml'))
-    }
-    catch {
-      return false
-    }
-  }
-
-  async install(packageDir = '.') {
-    const { execSync } = __nccwpck_require__(1421)
-    const command = `cd ${packageDir} && pnpm install`
-    core.debug(`[${this.name}] Running: ${command}`)
-    return execSync(command, { stdio: 'inherit' })
-  }
-
-  async test(packageDir = '.') {
-    const { execSync } = __nccwpck_require__(1421)
-    try {
-      const command = `cd ${packageDir} && pnpm test`
-      core.debug(`[${this.name}] Running: ${command}`)
-      execSync(command, { stdio: 'inherit' })
-      return { success: true }
-    }
-    catch (error) {
-      core.warning(`[${this.name}] Tests failed: ${error.message}`)
-      return { success: false, error: error.message }
-    }
-  }
-
-  async build(packageDir = '.') {
-    const { execSync } = __nccwpck_require__(1421)
-    const command = `cd ${packageDir} && pnpm build`
-    core.debug(`[${this.name}] Running: ${command}`)
-    return execSync(command, { stdio: 'inherit' })
-  }
-
-  getInstallCommand(packageDir = '.') {
-    return `cd ${packageDir} && pnpm install`
-  }
-
-  getTestCommand(packageDir = '.') {
-    return `cd ${packageDir} && pnpm test`
-  }
-}
-
-module.exports = { PnpmPackageManagerStrategy }
-
-
-/***/ }),
-
-/***/ 3869:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const path = __nccwpck_require__(6760)
-const core = __nccwpck_require__(7484)
-const { PackageManagerStrategy } = __nccwpck_require__(1124)
-
-class YarnPackageManagerStrategy extends PackageManagerStrategy {
-  constructor() {
-    super('yarn')
-  }
-
-  isAvailable() {
-    try {
-      const fs = __nccwpck_require__(3024)
-      return fs.existsSync(path.join((__nccwpck_require__(1708).cwd)(), 'yarn.lock'))
-    }
-    catch {
-      return false
-    }
-  }
-
-  async install(packageDir = '.') {
-    const { execSync } = __nccwpck_require__(1421)
-    const command = `cd ${packageDir} && yarn install`
-    core.debug(`[${this.name}] Running: ${command}`)
-    return execSync(command, { stdio: 'inherit' })
-  }
-
-  async test(packageDir = '.') {
-    const { execSync } = __nccwpck_require__(1421)
-    try {
-      const command = `cd ${packageDir} && yarn test`
-      core.debug(`[${this.name}] Running: ${command}`)
-      execSync(command, { stdio: 'inherit' })
-      return { success: true }
-    }
-    catch (error) {
-      core.warning(`[${this.name}] Tests failed: ${error.message}`)
-      return { success: false, error: error.message }
-    }
-  }
-
-  async build(packageDir = '.') {
-    const { execSync } = __nccwpck_require__(1421)
-    const command = `cd ${packageDir} && yarn build`
-    core.debug(`[${this.name}] Running: ${command}`)
-    return execSync(command, { stdio: 'inherit' })
-  }
-
-  getInstallCommand(packageDir = '.') {
-    return `cd ${packageDir} && yarn install`
-  }
-
-  getTestCommand(packageDir = '.') {
-    return `cd ${packageDir} && yarn test`
-  }
-}
-
-module.exports = { YarnPackageManagerStrategy }
-
-
 /***/ })
 
 /******/ 	});
@@ -49950,1159 +52770,13 @@ module.exports = { YarnPackageManagerStrategy }
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
 /******/ 	
 /************************************************************************/
-var __webpack_exports__ = {};
-// @ts-check
-(__nccwpck_require__(3622).install)()
-const { execSync } = __nccwpck_require__(1421)
-const fs = __nccwpck_require__(1455)
-const path = __nccwpck_require__(6760)
-// index.js
-const core = __nccwpck_require__(7484)
-const conventionalCommitsParser = __nccwpck_require__(4375)
-const { globSync } = __nccwpck_require__(1363)
-const semver = __nccwpck_require__(2088)
-const simpleGit = (__nccwpck_require__(9065)["default"])
-
-const git = simpleGit()
-
-const depKeys = ['dependencies', 'devDependencies', 'peerDependencies']
-
-// Strategy Pattern: Version Bump Strategies
-class VersionBumpStrategy {
-  constructor(name) {
-    this.name = name
-  }
-
-  execute(_currentVersion, _commitBasedBump, _historicalBump) {
-    throw new Error('Strategy must implement execute method')
-  }
-}
-
-class DoNothingStrategy extends VersionBumpStrategy {
-  constructor() {
-    super('do-nothing')
-  }
-
-  execute(_currentVersion, _commitBasedBump, _historicalBump) {
-    core.debug(`Strategy 'do-nothing': Skipping bump`)
-    return _currentVersion // No change
-  }
-}
-
-class ApplyBumpStrategy extends VersionBumpStrategy {
-  constructor() {
-    super('apply-bump')
-  }
-
-  execute(currentVersion, _commitBasedBump, _historicalBump) {
-    const current = semver.coerce(currentVersion) || '0.0.0'
-    const nextVersion = semver.inc(current, _commitBasedBump)
-    core.debug(`Strategy 'apply-bump': Normal semver bump ${current} → ${nextVersion}`)
-    return nextVersion // 1.1.0 → 1.2.0
-  }
-}
-
-class PreReleaseStrategy extends VersionBumpStrategy {
-  constructor() {
-    super('pre-release')
-  }
-
-  execute(currentVersion, commitBasedBump, _historicalBump) {
-    const current = semver.coerce(currentVersion) || '0.0.0'
-
-    if (semver.prerelease(current)) {
-      const nextVersion = semver.inc(current, 'prerelease')
-      core.debug(`Strategy 'pre-release': Increment prerelease ${current} → ${nextVersion}`)
-      return nextVersion // 1.2.0-1 → 1.2.0-2
-    }
-    else {
-      // First time: apply bump then make prerelease
-      const bumped = semver.inc(current, commitBasedBump) // 1.1.0 → 1.2.0
-      const nextVersion = bumped ? semver.inc(bumped, 'prerelease', '0') : null // 1.2.0 → 1.2.0-0
-      core.debug(`Strategy 'pre-release': First prerelease ${current} → ${bumped} → ${nextVersion}`)
-      return nextVersion
-    }
-  }
-}
-
-class VersionBumpStrategyFactory {
-  static strategies = {
-    'do-nothing': new DoNothingStrategy(),
-    'apply-bump': new ApplyBumpStrategy(),
-    'pre-release': new PreReleaseStrategy(),
-  }
-
-  static getStrategy(strategyName) {
-    const strategy = this.strategies[strategyName]
-    if (!strategy) {
-      throw new Error(`Unknown version bump strategy: ${strategyName}`)
-    }
-    return strategy
-  }
-
-  static getAvailableStrategies() {
-    return Object.keys(this.strategies)
-  }
-}
-
-// Strategy Pattern: Branch Cleanup Strategies
-class BranchCleanupStrategy {
-  constructor(name) {
-    this.name = name
-  }
-
-  async execute(_branches, _versionedBranch, _templateRegex, _rootBump) {
-    throw new Error('Strategy must implement execute method')
-  }
-}
-
-class KeepAllBranchesStrategy extends BranchCleanupStrategy {
-  constructor() {
-    super('keep')
-  }
-
-  async execute(_branches, _versionedBranch, _templateRegex, _rootBump) {
-    core.info(`[root] Branch cleanup strategy: ${this.name} - keeping all branches`)
-    // Do nothing - keep all branches
-  }
-}
-
-class PruneOldBranchesStrategy extends BranchCleanupStrategy {
-  constructor() {
-    super('prune')
-  }
-
-  async execute(branches, versionedBranch, templateRegex, _rootBump) {
-    core.info(`[root] Branch cleanup strategy: ${this.name} - removing old branches`)
-
-    for (const branch of branches.all) {
-      if (branch.replace('origin/', '') === versionedBranch) {
-        continue // Skip current branch
-      }
-
-      const match = branch.match(templateRegex)
-      const { version } = match?.groups || {}
-      if (version) {
-        core.info(`[root] Deleting old branch ${branch}`)
-        await this._deleteBranch(branch)
-      }
-    }
-  }
-
-  async _deleteBranch(branch) {
-    try {
-      await git.deleteLocalBranch(branch, true)
-    }
-    catch { }
-  }
-}
-
-class SemanticBranchesStrategy extends BranchCleanupStrategy {
-  constructor() {
-    super('semantic')
-  }
-
-  async execute(branches, versionedBranch, templateRegex, rootBump) {
-    core.info(`[root] Branch cleanup strategy: ${this.name} - keeping same bump type only`)
-
-    for (const branch of branches.all) {
-      if (branch.replace('origin/', '') === versionedBranch) {
-        continue // Skip current branch
-      }
-
-      const match = branch.match(templateRegex)
-      const { version } = match?.groups || {}
-      if (version) {
-        const bumpType = guessBumpType(version)
-        if (bumpType !== rootBump) {
-          continue // Keep different bump types
-        }
-
-        core.info(`[root] Deleting same-type branch ${branch} (${bumpType})`)
-        await this._deleteBranch(branch)
-      }
-    }
-  }
-
-  async _deleteBranch(branch) {
-    try {
-      await git.deleteLocalBranch(branch, true)
-    }
-    catch { }
-  }
-}
-
-class BranchCleanupStrategyFactory {
-  static strategies = {
-    keep: new KeepAllBranchesStrategy(),
-    prune: new PruneOldBranchesStrategy(),
-    semantic: new SemanticBranchesStrategy(),
-  }
-
-  static getStrategy(strategyName) {
-    const strategy = this.strategies[strategyName]
-    if (!strategy) {
-      throw new Error(`Unknown branch cleanup strategy: ${strategyName}`)
-    }
-    return strategy
-  }
-
-  static getAvailableStrategies() {
-    return Object.keys(this.strategies)
-  }
-}
-
-// Discovery Strategy Pattern - handles all git discovery operations
-// This replaces the old ReferencePointStrategy pattern with a cleaner approach
-
-const { GitOperationStrategyFactory } = __nccwpck_require__(5725)
-const { DiscoveryStrategyFactory } = __nccwpck_require__(9340)
-// Strategy Pattern: Import from lib folder
-const { PackageManagerFactory } = __nccwpck_require__(3451)
-
-class Package {
-  constructor(name, dir, pkg, packageJsonPath) {
-    this.name = name
-    this.dir = dir
-    this.pkg = pkg
-    this.packageJsonPath = packageJsonPath
-    this.bumpResult = null
-  }
-
-  get version() {
-    return this.pkg.version
-  }
-
-  set version(newVersion) {
-    this.pkg.version = newVersion
-  }
-
-  get relativePath() {
-    return path.relative(process.cwd(), this.dir) || '/'
-  }
-
-  initializeVersion() {
-    if (!this.pkg.version) {
-      this.pkg.version = initializeVersion(this.pkg.version)
-      core.info(`[${this.name}] Initialized missing version to ${this.pkg.version}`)
-    }
-  }
-
-  async save() {
-    await writeJSON(this.packageJsonPath, this.pkg)
-  }
-
-  async getLastVersionChangeCommit() {
-    const discoveryStrategy = DiscoveryStrategyFactory.getStrategy()
-    return await discoveryStrategy.findLastVersionChangeCommit(this.packageJsonPath)
-  }
-
-  async getCommitsAffecting(sinceRef) {
-    return await getCommitsAffecting(this.dir, sinceRef)
-  }
-
-  async getVersionAtCommit(commitRef) {
-    const discoveryStrategy = DiscoveryStrategyFactory.getStrategy()
-    return await discoveryStrategy.getVersionAtCommit(commitRef)
-  }
-
-  async processVersionBump(referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy, shouldForceBump = false) {
-    this.initializeVersion()
-
-    core.info(`[${this.name}@${this.version}] Processing package`)
-
-    // Step 2a: Find changes since reference point (tag or branch)
-    const commitsSinceReference = await this.getCommitsAffecting(referenceCommit)
-    const commitBasedBump = commitsSinceReference.length > 0 ? getMostSignificantBump(commitsSinceReference) : null
-
-    // Step 2c: Calculate historical bump type from reference
-    const historicalVersion = await this.getVersionAtCommit(referenceCommit) || referenceVersion
-    const historicalBump = calculateBumpType(historicalVersion, this.version)
-
-    core.info(`[${this.name}@${this.version}] Commit-based bump: ${commitBasedBump || 'none'}, Historical bump: ${historicalBump || 'none'}`)
-
-    // Step 2d: Apply strategy for same bump type
-    if (commitBasedBump && commitBasedBump === historicalBump) {
-      core.info(`[${this.name}@${this.version}] Same bump type detected, applying strategy: ${strategy}`)
-
-      const nextVersion = getNextVersion(this.version, commitBasedBump, historicalBump, strategy)
-
-      if (nextVersion === this.version) {
-        core.info(`[${this.name}@${this.version}] Skipping - strategy '${strategy}' with no changes needed`)
-        return null
-      }
-    }
-    // Step 2d.5: Force bump if requested and changes exist
-    else if (shouldForceBump && commitBasedBump) {
-      core.info(`[${this.name}@${this.version}] Force bump requested with changes, applying bump: ${commitBasedBump}`)
-
-      const nextVersion = getNextVersion(this.version, commitBasedBump, historicalBump, 'apply-bump')
-
-      if (nextVersion === this.version) {
-        core.info(`[${this.name}@${this.version}] Skipping - no version change needed`)
-        return null
-      }
-
-      this.version = nextVersion
-      await this.save()
-
-      const bumpType = semver.prerelease(nextVersion) ? 'prerelease' : commitBasedBump
-
-      // Use git strategy to commit the version change
-      await gitStrategy.commitVersionChange(this.dir, this.name, this.version, bumpType, commitMsgTemplate)
-
-      const result = {
-        version: this.version,
-        bumpType,
-        sha: referenceCommit,
-      }
-
-      if (semver.prerelease(this.version)) {
-        core.info(`[${this.name}@${this.version}] Bumped to ${this.version} (prerelease)`)
-      }
-      else {
-        core.info(`[${this.name}@${this.version}] Bumped to ${this.version} (${commitBasedBump})`)
-      }
-
-      this.bumpResult = result
-      return result
-    }
-
-    // Step 2e: Use commit-based bump if different from historical
-    if (commitBasedBump && commitBasedBump !== historicalBump) {
-      const nextVersion = getNextVersion(this.version, commitBasedBump, historicalBump, 'apply-bump')
-      this.version = nextVersion
-      await this.save()
-
-      // Use git strategy to commit the version change
-      await gitStrategy.commitVersionChange(this.dir, this.name, this.version, commitBasedBump, commitMsgTemplate)
-
-      const result = {
-        version: this.version,
-        bumpType: commitBasedBump,
-        sha: referenceCommit,
-      }
-
-      core.info(`[${this.name}@${this.version}] Bumped to ${this.version} (${commitBasedBump})`)
-      this.bumpResult = result
-      return result
-    }
-
-    // No changes needed
-    return null
-  }
-
-  async finalizePrerelease(commitMsgTemplate, gitStrategy) {
-    if (this.version && semver.prerelease(this.version)) {
-      const finalVersion = finalizeVersion(this.version)
-      core.info(`[${this.name}] Finalizing prerelease version: ${this.version} → ${finalVersion}`)
-
-      this.version = finalVersion
-      await this.save()
-
-      // Use git strategy to commit the finalization
-      await gitStrategy.commitVersionChange(this.dir, this.name, finalVersion, 'release', commitMsgTemplate)
-
-      const result = { version: finalVersion, bumpType: 'release', sha: null }
-      this.bumpResult = result
-      return result
-    }
-    return null
-  }
-
-  async updateDependency(depName, newVersion, depCommitMsgTemplate, gitStrategy) {
-    let updated = false
-
-    for (const depKey of depKeys) {
-      if (this.pkg[depKey] && this.pkg[depKey][depName]) {
-        const currentDepSpec = this.pkg[depKey][depName]
-
-        if (semver.satisfies(newVersion, currentDepSpec)) {
-          continue
-        }
-
-        core.info(`[${this.name}] Updating ${depName} dependency from ${currentDepSpec} to ^${newVersion}`)
-        this.pkg[depKey][depName] = `^${newVersion}`
-        updated = true
-      }
-    }
-
-    if (updated) {
-      await this.save()
-
-      // Use git strategy to commit the dependency update
-      await gitStrategy.commitDependencyUpdate(this.dir, this.name, depName, newVersion, depCommitMsgTemplate)
-      core.info(`[${this.name}] Updated dependencies for ${depName}`)
-    }
-
-    return updated
-  }
-
-  async testCompatibility(packageManager) {
-    try {
-      const testResult = await packageManager.test(this.dir)
-      return testResult
-    }
-    catch (error) {
-      core.warning(`[${this.name}] Test execution failed: ${error.message}`)
-      return { success: false, error: error.message }
-    }
-  }
-}
-
-function safeGetBooleanInput(input, defaultValue) {
-  try {
-    return core.getBooleanInput(input) ?? defaultValue
-  }
-  catch (_error) {
-    return defaultValue
-  }
-}
-
-async function parseConfiguration() {
-  const commitMsgTemplate = core.getInput('commit_template') || 'chore(release): bump ${package} to ${version} (${bumpType})'
-  const depCommitMsgTemplate = core.getInput('dependency_commit_template') || 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)'
-  const shouldCreateBranch = safeGetBooleanInput('create_branch', false)
-  const branchTemplate = core.getInput('branch_template') || 'release/${version}'
-  const templateRegex = new RegExp(branchTemplate.replace(/\$\{(\w+)\}/g, '(?<$1>\\w+)'))
-  const branchCleanup = core.getInput('branch_cleanup') || 'keep'
-  const baseBranch = core.getInput('base') || shouldCreateBranch ? 'main' : undefined
-  const strategy = core.getInput('strategy') || 'do-nothing'
-  const activeBranch = core.getInput('branch') || 'develop'
-  const tagPrereleases = safeGetBooleanInput('tag_prereleases', false)
-
-  // Validate configuration inputs
-  const validStrategies = VersionBumpStrategyFactory.getAvailableStrategies()
-  if (!validStrategies.includes(strategy)) {
-    throw new Error(`Invalid strategy: ${strategy}. Must be one of: ${validStrategies.join(', ')}`)
-  }
-
-  const validCleanupStrategies = BranchCleanupStrategyFactory.getAvailableStrategies()
-  if (!validCleanupStrategies.includes(branchCleanup)) {
-    throw new Error(`Invalid branch cleanup strategy: ${branchCleanup}. Must be one of: ${validCleanupStrategies.join(', ')}`)
-  }
-
-  if (activeBranch && activeBranch.trim() === '') {
-    throw new Error('branch cannot be empty if provided')
-  }
-
-  if (baseBranch && baseBranch.trim() === '') {
-    throw new Error('base cannot be empty if provided')
-  }
-
-  // Validate branch compatibility
-  if (strategy === 'pre-release' && !baseBranch) {
-    core.warning('Using pre-release strategy without base - prerelease finalization will not be available')
-  }
-
-  core.info(`[config] Strategy: ${strategy}`)
-  core.info(`[config] Active branch: ${activeBranch}`)
-  core.info(`[config] Tag prereleases: ${tagPrereleases}`)
-  core.info(`[config] Commit message template: ${commitMsgTemplate}`)
-  core.info(`[config] Dependency commit message template: ${depCommitMsgTemplate}`)
-  core.info(`[config] Should create branch: ${shouldCreateBranch}`)
-  core.info(`[config] Branch template: ${branchTemplate}`)
-  core.info(`[config] Branch cleanup: ${branchCleanup}`)
-  core.info(`[config] Base branch: ${baseBranch}`)
-  core.info(`[config] Strategy: ${strategy}`)
-
-  return {
-    commitMsgTemplate,
-    depCommitMsgTemplate,
-    shouldCreateBranch,
-    branchTemplate,
-    templateRegex,
-    branchCleanup,
-    baseBranch,
-    strategy,
-    activeBranch,
-    tagPrereleases,
-  }
-}
-
-async function setupGit(shouldCreateBranch, branchTemplate) {
-  await git.addConfig('user.name', 'github-actions[bot]')
-  await git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com')
-
-  try {
-    core.debug(`[git] Fetching latest changes from origin`)
-    await git.fetch(['--prune', 'origin'])
-    core.debug(`[git] Successfully fetched from origin`)
-  }
-  catch (error) {
-    core.warning(`[git] Failed to fetch from origin: ${error.message}`)
-  }
-
-  const currentBranch = process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || 'main'
-  const newBranch = shouldCreateBranch ? interpolate(branchTemplate, { version: currentBranch }) : undefined
-
-  try {
-    if (newBranch) {
-      core.info(`[git] Checking out ${newBranch} from ${currentBranch}`)
-      await git.checkoutBranch(newBranch, currentBranch)
-      core.debug(`[git] Successfully checked out ${newBranch}`)
-    }
-    else {
-      core.info(`[git] Checking out ${currentBranch}`)
-      await git.checkout(currentBranch)
-      core.debug(`[git] Successfully checked out ${currentBranch}`)
-    }
-  }
-  catch (error) {
-    core.error(`[git] Failed to checkout branch: ${error.message}`)
-    throw new Error(`Failed to checkout branch: ${error.message}`)
-  }
-
-  return { currentBranch, newBranch }
-}
-
-async function determineReferencePoint(baseBranch, activeBranch) {
-  const discoveryStrategy = DiscoveryStrategyFactory.getStrategy(baseBranch)
-  const result = await discoveryStrategy.findReferencePoint(baseBranch, activeBranch)
-
-  core.info(`[root] Reference: ${result.referenceCommit} (version: ${result.referenceVersion})`)
-
-  return result
-}
-
-async function processWorkspacePackages(packages, referenceCommit, referenceVersion, strategy, commitMsgTemplate, depCommitMsgTemplate, gitStrategy, packageManager, shouldForceBump = false) {
-  const bumped = {}
-  const testFailures = []
-
-  for (const pkg of packages) {
-    const result = await pkg.processVersionBump(referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy, shouldForceBump)
-    if (result) {
-      bumped[pkg.name] = result
-    }
-  }
-
-  // Update dependencies for bumped packages
-  for (const pkg of packages) {
-    if (bumped[pkg.name]) {
-      for (const siblingPkg of packages) {
-        if (siblingPkg.name !== pkg.name) {
-          const updated = await siblingPkg.updateDependency(pkg.name, pkg.version, depCommitMsgTemplate, gitStrategy)
-
-          if (updated && bumped[pkg.name].bumpType === 'major') {
-            // Test major version compatibility using package manager strategy
-            const testResult = await siblingPkg.testCompatibility(packageManager)
-            if (!testResult.success) {
-              core.warning(`[${siblingPkg.name}] Tests failed after major bump of ${pkg.name}, locking to previous version`)
-              testFailures.push(siblingPkg.name)
-
-              // Revert to previous version with exact pinning
-              const prevVersion = testResult.prevVersion || pkg.version
-              for (const depKey of depKeys) {
-                if (siblingPkg.pkg[depKey] && siblingPkg.pkg[depKey][pkg.name]) {
-                  siblingPkg.pkg[depKey][pkg.name] = prevVersion
-                }
-              }
-              await siblingPkg.save()
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return { bumped, testFailures }
-}
-
-async function finalizePackageVersions(packages, rootPkg, commitMsgTemplate, gitStrategy) {
-  const bumped = {}
-  let hasBumped = false
-
-  core.info(`[root] Finalizing prerelease versions for base branch update`)
-
-  for (const pkg of packages) {
-    const result = await pkg.finalizePrerelease(commitMsgTemplate, gitStrategy)
-    if (result) {
-      bumped[pkg.name] = result
-      hasBumped = true
-    }
-  }
-
-  // Finalize root package if it's a prerelease
-  if (rootPkg.version && semver.prerelease(rootPkg.version)) {
-    const finalVersion = finalizeVersion(rootPkg.version)
-    core.info(`[root] Finalizing prerelease version: ${rootPkg.version} → ${finalVersion}`)
-
-    rootPkg.version = finalVersion
-    const rootPackageJsonPath = path.join(process.cwd(), 'package.json')
-    await writeJSON(rootPackageJsonPath, rootPkg)
-
-    // Use git strategy to commit the root finalization
-    await gitStrategy.commitVersionChange(process.cwd(), rootPkg.name || 'root', finalVersion, 'release', commitMsgTemplate)
-
-    bumped[rootPkg.name] = { version: finalVersion, bumpType: 'release', sha: null }
-    hasBumped = hasBumped || true
-  }
-
-  if (hasBumped) {
-    core.info(`[root] Prerelease finalization complete`)
-
-    // Create release tags for finalized versions using git strategy
-    if (rootPkg.version) {
-      await gitStrategy.tagVersion(rootPkg.version, false, true) // Force tagging for finalized releases
-    }
-  }
-  else {
-    core.info(`[root] No prerelease versions found to finalize`)
-  }
-
-  return { bumped, hasBumped }
-}
-
-async function processRootPackage(rootPkg, bumped, referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy, shouldForceBump = false) {
-  if (!rootPkg.workspaces) {
-    return { bumped, hasBumped: false }
-  }
-
-  core.info(`[root@${rootPkg.version}] Processing root package`)
-
-  // Initialize root version if missing
-  if (!rootPkg.version) {
-    rootPkg.version = initializeVersion(rootPkg.version)
-    core.info(`[root] Initialized missing version to ${rootPkg.version}`)
-  }
-
-  // Step 1: Compute most significant bump from workspaces
-  let workspaceBump = null
-  for (const name in bumped) {
-    if (bumpPriority(bumped[name].bumpType) > bumpPriority(workspaceBump)) {
-      workspaceBump = bumped[name].bumpType
-    }
-  }
-
-  // Step 2: Calculate historical bump type from reference
-  const rootPackageJsonPath = path.join(process.cwd(), 'package.json')
-  const discoveryStrategy = DiscoveryStrategyFactory.getStrategy()
-  const rootHistoricalVersion = await discoveryStrategy.getVersionAtCommit(referenceCommit) || referenceVersion
-  const rootHistoricalBump = calculateBumpType(rootHistoricalVersion, rootPkg.version)
-
-  core.info(`[root@${rootPkg.version}] Required bump: ${workspaceBump}, Historical bump: ${rootHistoricalBump || 'none'}`)
-
-  let hasBumped = false
-
-  // Step 3: Apply strategy if same bump type
-  if (workspaceBump && workspaceBump === rootHistoricalBump) {
-    core.info(`[root@${rootPkg.version}] Same bump type detected, applying strategy: ${strategy}`)
-
-    const nextVersion = getNextVersion(rootPkg.version, workspaceBump, rootHistoricalBump, strategy)
-
-    if (nextVersion !== rootPkg.version) {
-      rootPkg.version = nextVersion
-      await writeJSON(rootPackageJsonPath, rootPkg)
-
-      const bumpType = semver.prerelease(nextVersion) ? 'prerelease' : workspaceBump
-
-      // Use git strategy to commit the root version change
-      await gitStrategy.commitVersionChange(process.cwd(), rootPkg.name || 'root', rootPkg.version, bumpType, commitMsgTemplate)
-
-      bumped[rootPkg.name] = { version: rootPkg.version, bumpType, sha: null }
-      hasBumped = true
-
-      if (semver.prerelease(rootPkg.version)) {
-        core.info(`[root@${rootPkg.version}] Bumped to ${rootPkg.version} (prerelease)`)
-      }
-      else {
-        core.info(`[root@${rootPkg.version}] Bumped to ${rootPkg.version} (${workspaceBump})`)
-      }
-    }
-    else {
-      core.info(`[root@${rootPkg.version}] Skipping - strategy '${strategy}' with no changes needed`)
-    }
-  }
-  else if (workspaceBump && workspaceBump !== rootHistoricalBump) {
-    // Step 4: Use workspace bump if different from historical
-    const nextVersion = getNextVersion(rootPkg.version, workspaceBump, rootHistoricalBump, 'apply-bump')
-    rootPkg.version = nextVersion
-    await writeJSON(rootPackageJsonPath, rootPkg)
-
-    // Use git strategy to commit the root version change
-    await gitStrategy.commitVersionChange(process.cwd(), rootPkg.name || 'root', rootPkg.version, workspaceBump, commitMsgTemplate)
-
-    bumped[rootPkg.name] = { version: rootPkg.version, bumpType: workspaceBump, sha: null }
-    hasBumped = true
-
-    core.info(`[root@${rootPkg.version}] Bumped to ${rootPkg.version} (${workspaceBump})`)
-  }
-  else if (workspaceBump) {
-    core.info(`[root@${rootPkg.version}] No changes requiring version bump`)
-  }
-  else {
-    core.info(`[root] Root was bumped in workspace processing`)
-  }
-
-  // Step 5: Force bump if requested and no workspace bumps occurred
-  if (shouldForceBump && !workspaceBump && Object.keys(bumped).length === 0) {
-    core.info(`[root@${rootPkg.version}] Force bump requested but no changes detected in workspaces`)
-    // Check if there are any commits since the reference
-    const commitsSinceReference = await getCommitsAffecting(process.cwd(), referenceCommit)
-    if (commitsSinceReference.length > 0) {
-      const forceBumpType = getMostSignificantBump(commitsSinceReference)
-      core.info(`[root@${rootPkg.version}] Force bumping root package with ${forceBumpType} due to ${commitsSinceReference.length} commits`)
-
-      const nextVersion = getNextVersion(rootPkg.version, forceBumpType, null, 'apply-bump')
-      if (nextVersion !== rootPkg.version) {
-        rootPkg.version = nextVersion
-        await writeJSON(rootPackageJsonPath, rootPkg)
-
-        // Use git strategy to commit the root version change
-        await gitStrategy.commitVersionChange(process.cwd(), rootPkg.name || 'root', rootPkg.version, forceBumpType, commitMsgTemplate)
-
-        bumped[rootPkg.name] = { version: rootPkg.version, bumpType: forceBumpType, sha: null }
-        hasBumped = true
-
-        core.info(`[root@${rootPkg.version}] Force bumped to ${rootPkg.version} (${forceBumpType})`)
-      }
-    }
-  }
-
-  return { bumped, hasBumped }
-}
-
-async function generateSummary(bumped, testFailures, strategy, activeBranch, baseBranch, tagPrereleases, shouldFinalizeVersions, shouldForceBump = false) {
-  const totalPackages = Object.keys(bumped).length
-  const prereleasePackages = Object.values(bumped).filter(b => semver.prerelease(b.version)).length
-  const releasePackages = totalPackages - prereleasePackages
-  const finalizedPackages = Object.values(bumped).filter(b => b.bumpType === 'release').length
-
-  core.summary.addHeading('Version Bump Summary', 2)
-  core.summary.addTable([
-    [
-      { data: 'Package', header: true },
-      { data: 'Version', header: true },
-      { data: 'Bump Type', header: true },
-      { data: 'Previous Commit', header: true },
-      { data: 'Status', header: true },
-    ],
-    ...Object.entries(bumped).map(([name, { version, bumpType, sha }]) => [
-      { data: name },
-      { data: version },
-      { data: bumpType },
-      { data: sha?.slice(0, 7) || 'N/A' },
-      { data: testFailures.includes(name) ? ':x: Failed' : ':white_check_mark: Success' },
-    ]),
-  ])
-
-  // Add configuration summary
-  core.summary.addHeading('Configuration Used', 3)
-  core.summary.addList([
-    `Strategy: ${strategy}`,
-    `Active branch: ${activeBranch}`,
-    `Base branch: ${baseBranch || 'N/A'}`,
-    `Tag prereleases: ${tagPrereleases}`,
-    `Should finalize versions: ${shouldFinalizeVersions}`,
-    `Should force bump: ${shouldForceBump}`,
-  ])
-
-  // Add statistics
-  core.summary.addHeading('Statistics', 3)
-  core.summary.addList([
-    `Total packages processed: ${totalPackages}`,
-    `Release versions: ${releasePackages}`,
-    `Prerelease versions: ${prereleasePackages}`,
-    `Finalized versions: ${finalizedPackages}`,
-    `Test failures: ${testFailures.length}`,
-  ])
-
-  if (totalPackages > 0) {
-    core.info(`[summary] Processed ${totalPackages} packages: ${releasePackages} releases, ${prereleasePackages} prereleases, ${finalizedPackages} finalized`)
-    core.notice(`Version bump completed: ${totalPackages} packages updated (${releasePackages} releases, ${prereleasePackages} prereleases)`)
-  }
-  else {
-    core.info(`[summary] No packages required version changes with strategy '${strategy}'`)
-    core.notice(`No version changes needed with strategy '${strategy}'`)
-  }
-
-  // Set comprehensive outputs
-  core.setOutput('packages-updated', totalPackages)
-  core.setOutput('releases-created', releasePackages)
-  core.setOutput('prereleases-created', prereleasePackages)
-  core.setOutput('versions-finalized', finalizedPackages)
-  core.setOutput('test-failures', testFailures.length)
-  core.setOutput('strategy-used', strategy)
-  core.setOutput('changes-made', totalPackages > 0)
-
-  // Export useful environment variables
-  core.exportVariable('VERSION_BUMP_PACKAGES_UPDATED', totalPackages)
-  core.exportVariable('VERSION_BUMP_CHANGES_MADE', totalPackages > 0)
-  core.exportVariable('VERSION_BUMP_STRATEGY', strategy)
-
-  return { totalPackages, releasePackages, prereleasePackages, finalizedPackages }
-}
-
-async function handleBranchOperations(newBranch, hasBumped, rootPkg, branchTemplate, branchCleanup, templateRegex, tagPrereleases, gitStrategy) {
-  let outputBranch = newBranch
-
-  // Branch and tag handling
-  if (newBranch && hasBumped) {
-    const versionedBranch = interpolate(branchTemplate, {
-      version: rootPkg.version,
-    })
-    const remoteVersionedBranch = `origin/${versionedBranch}`
-    const branches = await git.branch(['--list', '--remote'])
-    if (branches.all.includes(remoteVersionedBranch)) {
-      core.info(`[root] Deleting ${remoteVersionedBranch}`)
-      try {
-        await git.deleteLocalBranch(remoteVersionedBranch, true)
-      }
-      catch { }
-    }
-    core.info(`[root] Checking out ${versionedBranch} from ${newBranch}`)
-    await git.checkoutBranch(versionedBranch, newBranch)
-    core.info(`[root] Deleting ${newBranch}`)
-    await git.deleteLocalBranch(newBranch, true)
-    outputBranch = versionedBranch
-
-    const cleanupStrategy = BranchCleanupStrategyFactory.getStrategy(branchCleanup)
-    const rootBump = guessBumpType(rootPkg.version)
-    await cleanupStrategy.execute(branches, versionedBranch, templateRegex, rootBump)
-  }
-  else {
-    // Use git strategy to create tags
-    await gitStrategy.tagVersion(rootPkg.version, semver.prerelease(rootPkg.version), tagPrereleases)
-  }
-
-  return outputBranch
-}
-
-function interpolate(template, vars) {
-  return template.replace(/\$\{(\w+)\}/g, (_, v) => vars[v] ?? '')
-}
-
-function getPackageManager() {
-  return PackageManagerFactory.getPackageManager()
-}
-
-async function readJSON(file) {
-  return JSON.parse(await fs.readFile(file, 'utf8'))
-}
-
-async function writeJSON(file, data) {
-  await fs.writeFile(file, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
-}
-
-function initializeVersion(version) {
-  return semver.coerce(version) || '0.0.0'
-}
-
-function calculateBumpType(fromVersion, toVersion) {
-  const from = semver.coerce(fromVersion) || '0.0.0'
-  const to = semver.coerce(toVersion) || '0.0.0'
-  return semver.diff(from, to) // 'major', 'minor', 'patch', 'prerelease', null
-}
-
-function getNextVersion(currentVersion, commitBasedBump, historicalBump, strategyName = 'do-nothing') {
-  const current = semver.coerce(currentVersion) || '0.0.0'
-
-  // Validate inputs
-  if (commitBasedBump && !['major', 'minor', 'patch'].includes(commitBasedBump)) {
-    throw new Error(`Invalid commitBasedBump: ${commitBasedBump}`)
-  }
-
-  if (commitBasedBump === historicalBump) {
-    // Same bump type - use configured strategy
-    core.debug(`Same bump type detected (${commitBasedBump}), using strategy: ${strategyName}`)
-
-    const strategy = VersionBumpStrategyFactory.getStrategy(strategyName)
-    const nextVersion = strategy.execute(currentVersion, commitBasedBump, historicalBump)
-
-    // Handle do-nothing strategy return value
-    if (nextVersion === currentVersion && strategyName === 'do-nothing') {
-      return null // Skip bump
-    }
-
-    return nextVersion
-  }
-  else {
-    // Different bump type - normal semver bump (always apply)
-    const nextVersion = semver.inc(current, commitBasedBump)
-    core.debug(`Different bump type: ${current} → ${nextVersion} (${commitBasedBump})`)
-    return nextVersion
-  }
-}
-
-// Finalize prerelease versions when target is updated
-function finalizeVersion(version) {
-  const current = semver.coerce(version) || '0.0.0'
-  if (semver.prerelease(current)) {
-    // Remove prerelease suffix: 1.2.0-1 → 1.2.0
-    const parsed = semver.parse(current)
-    if (!parsed) return current
-    return `${parsed.major}.${parsed.minor}.${parsed.patch}`
-  }
-  return current
-}
-
-function getMostSignificantBump(commits) {
-  let bump = 'patch'
-  for (const c of commits) {
-    if (c.breaking)
-      return 'major'
-    if (c.type === 'feat' && bump !== 'major')
-      bump = 'minor'
-  }
-  return bump
-}
-
-function bumpPriority(type) {
-  if (type === 'major')
-    return 3
-  if (type === 'minor')
-    return 2
-  if (type === 'patch')
-    return 1
-  return 0
-}
-
-function parseCommits(log, sinceRef) {
-  const commits = []
-  for (const entry of log) {
-    const messageHeader = entry.message.split('\n')[0]
-    if (sinceRef && entry.hash === sinceRef) {
-      core.debug(`Skipping commit ${entry.hash} because it is the same as the sinceRef: ${messageHeader}`)
-      continue
-    }
-    core.debug(`Parsing commit ${entry.hash}: ${messageHeader}`)
-    const parsed = conventionalCommitsParser.sync(entry.message)
-    const breaking = Boolean(parsed.notes && parsed.notes.find(n => n.title === 'BREAKING CHANGE')) || (typeof parsed.header === 'string' && /!:/.test(parsed.header))
-    commits.push({
-      type: parsed.type,
-      scope: parsed.scope,
-      subject: parsed.subject,
-      breaking,
-      header: parsed.header,
-    })
-  }
-  return commits
-}
-
-async function getPackageDirs(rootPkg) {
-  if (rootPkg.workspaces) {
-    // Support both array and object form
-    const patterns = Array.isArray(rootPkg.workspaces)
-      ? rootPkg.workspaces
-      : rootPkg.workspaces.packages
-    const dirs = new Set()
-    for (const pattern of patterns) {
-      for (const match of globSync(pattern, { cwd: process.cwd(), absolute: true })) {
-        // Only include dirs with package.json
-        try {
-          await fs.access(path.join(match, 'package.json'))
-          dirs.add(path.resolve(match))
-        }
-        catch { }
-      }
-    }
-    return Array.from(dirs)
-  }
-  else {
-    return [process.cwd()]
-  }
-}
-
-async function buildDepGraph(pkgDirs) {
-  const graph = {}
-  const nameToDir = {}
-  for (const dir of pkgDirs) {
-    const pkg = await readJSON(path.join(dir, 'package.json'))
-    graph[pkg.name] = { dir, deps: [], pkg }
-    nameToDir[pkg.name] = dir
-  }
-  for (const name in graph) {
-    const { pkg } = graph[name]
-    const allDeps = { ...pkg.dependencies, ...pkg.devDependencies, ...pkg.peerDependencies }
-    for (const dep in allDeps) {
-      if (graph[dep])
-        graph[name].deps.push(dep)
-    }
-  }
-  return { graph, nameToDir }
-}
-
-function topoSort(graph) {
-  const visited = new Set()
-  const order = []
-  function visit(name) {
-    if (visited.has(name))
-      return
-    visited.add(name)
-    for (const dep of graph[name].deps) visit(dep)
-    order.push(name)
-  }
-  for (const name in graph) visit(name)
-  return order
-}
-
-async function getCommitsAffecting(dir, sinceRef) {
-  // Get all commits affecting this dir since the reference
-  const range = sinceRef ? `${sinceRef}..HEAD` : 'HEAD'
-  const log = await git.log([range, '--', dir])
-  const commits = parseCommits(log.all, sinceRef)
-  core.info(`[${path.relative(process.cwd(), dir) || '/'}] ${commits.length} commits affecting since ${sinceRef}`)
-  return commits
-}
-
-function deleteRemoteBranch(branch) {
-  try {
-    execSync(`git push origin --delete ${branch}`)
-  }
-  catch { }
-}
-
-// lastNonMergeCommit is now handled by BranchDiscoveryStrategy
-
-async function main() {
-  let exitCode = 0
-  let outputBranch
-  let hasBumped = false
-
-  try {
-    // Step 1: Parse and validate configuration
-    const config = await parseConfiguration()
-    const { commitMsgTemplate, depCommitMsgTemplate, shouldCreateBranch, branchTemplate, templateRegex, branchCleanup, baseBranch, strategy, activeBranch, tagPrereleases } = config
-
-    // Step 2: Setup git and determine branches
-    const { currentBranch: _currentBranch, newBranch } = await setupGit(shouldCreateBranch, branchTemplate)
-
-    // Step 3: Load root package and setup workspace
-    const rootDir = process.cwd()
-    const rootPkg = await readJSON(path.join(rootDir, 'package.json'))
-    const packageManager = getPackageManager()
-
-    // Initialize strategies
-    const gitStrategy = GitOperationStrategyFactory.getStrategy('conventional')
-    core.info(`[config] Package manager: ${packageManager.name}`)
-    core.info(`[config] Git strategy: ${gitStrategy.name}`)
-
-    // Step 4: Determine reference point for version comparison
-    const { referenceCommit, referenceVersion, shouldFinalizeVersions, shouldForceBump }
-      = await determineReferencePoint(baseBranch, activeBranch)
-
-    // Step 5: Discover packages and build dependency graph
-    const pkgDirs = await getPackageDirs(rootPkg)
-    const { graph, nameToDir: _nameToDir } = await buildDepGraph(pkgDirs)
-    const order = topoSort(graph)
-
-    // Create Package instances for easier management
-    const packages = order.map((name) => {
-      const { dir, pkg } = graph[name]
-      const packageJsonPath = path.join(dir, 'package.json')
-      return new Package(name, dir, pkg, packageJsonPath)
-    })
-
-    let bumped = {}
-    let testFailures = []
-
-    // Step 6: Handle prerelease finalization or normal processing
-    if (shouldFinalizeVersions) {
-      const result = await finalizePackageVersions(packages, rootPkg, commitMsgTemplate, gitStrategy)
-      bumped = result.bumped
-      hasBumped = hasBumped || result.hasBumped
-    }
-    else {
-      // Step 6a: Process workspace packages
-      const workspaceResult = await processWorkspacePackages(
-        packages,
-        referenceCommit,
-        referenceVersion,
-        strategy,
-        commitMsgTemplate,
-        depCommitMsgTemplate,
-        gitStrategy,
-        packageManager,
-        shouldForceBump,
-      )
-      bumped = workspaceResult.bumped
-      testFailures = workspaceResult.testFailures
-      hasBumped = hasBumped || Object.keys(bumped).length > 0
-
-      // Step 6b: Process root package
-      const rootResult = await processRootPackage(rootPkg, bumped, referenceCommit, referenceVersion, strategy, commitMsgTemplate, gitStrategy, shouldForceBump)
-      bumped = rootResult.bumped
-      if (rootResult.hasBumped)
-        hasBumped = true
-    }
-
-    // Step 7: Generate comprehensive summary and outputs
-    await generateSummary(bumped, testFailures, strategy, activeBranch, baseBranch, tagPrereleases, shouldFinalizeVersions, shouldForceBump)
-
-    // Step 8: Handle branch operations and cleanup
-    outputBranch = await handleBranchOperations(newBranch, hasBumped, rootPkg, branchTemplate, branchCleanup, templateRegex, tagPrereleases, gitStrategy)
-
-    // Step 9: Final validation and completion
-    if (hasBumped) {
-      core.info('✅ Version bump action completed successfully with changes')
-    }
-    else {
-      core.info('✅ Version bump action completed successfully with no changes needed')
-    }
-
-    // Validate final state
-    try {
-      const finalRootPkg = await readJSON(path.join(rootDir, 'package.json'))
-      if (finalRootPkg.version && !semver.valid(finalRootPkg.version)) {
-        throw new Error(`Final root package version is invalid: ${finalRootPkg.version}`)
-      }
-      core.debug(`[validation] Final root package version: ${finalRootPkg.version}`)
-      await gitStrategy.tagVersion(finalRootPkg.version, !!semver.prerelease(finalRootPkg.version), true)
-    }
-    catch (error) {
-      core.error(`[validation] Failed to validate final package state: ${error.message}`)
-      throw error
-    }
-  }
-  catch (err) {
-    console.error(err)
-    core.setFailed(err.message)
-    exitCode = 1
-  }
-  finally {
-    // Step 10: Push changes if any were made
-    if (hasBumped) {
-      try {
-        if (outputBranch) {
-          core.info(`[git] Pushing ${outputBranch} to origin`)
-          await git.push('origin', outputBranch, ['--set-upstream', '--force'])
-          core.setOutput('branch', outputBranch)
-          core.info(`[git] Successfully pushed ${outputBranch}`)
-        }
-        else {
-          core.info(`[git] Pushing current branch and tags`)
-          await git.push()
-          await git.pushTags()
-          core.info(`[git] Successfully pushed changes and tags`)
-        }
-      }
-      catch (error) {
-        core.error(`[git] Failed to push changes: ${error.message}`)
-        core.setFailed(`Failed to push changes: ${error.message}`)
-        exitCode = 1
-      }
-    }
-    else {
-      core.info(`[git] No changes to push`)
-    }
-  }
-  core.summary.write({ overwrite: true })
-  process.exit(exitCode)
-}
-
-function guessBumpType(version) {
-  if (version.endsWith('.0.0'))
-    return 'major'
-  if (version.endsWith('.0'))
-    return 'minor'
-  return 'patch'
-}
-
-// Discovery functions are now handled by strategies in lib/git-operations/
-
-main()
-
-module.exports = __webpack_exports__;
+/******/ 	
+/******/ 	// startup
+/******/ 	// Load entry module and return exports
+/******/ 	// This entry module is referenced by other modules so it can't be inlined
+/******/ 	var __webpack_exports__ = __nccwpck_require__(137);
+/******/ 	module.exports = __webpack_exports__;
+/******/ 	
 /******/ })()
 ;
-//# sourceMappingURL=index.cjs.js.map
+//# sourceMappingURL=index.js.map
