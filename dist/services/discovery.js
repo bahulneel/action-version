@@ -65,9 +65,9 @@ class DiscoveryService {
             // Check if we're on the base branch (finalization scenario)
             const currentBranch = await this.getCurrentBranch();
             const shouldFinalizeVersions = currentBranch === baseBranch;
-            // Find last non-merge commit on base branch
-            const branch = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`;
-            const referenceCommit = await this.findLastNonMergeCommit(branch);
+            // Find the merge base (last common ancestor) between current branch and base branch
+            const mergeBase = await git.raw(['merge-base', currentBranch, baseBranch]);
+            const referenceCommit = mergeBase.trim();
             // Get version at that commit
             const referenceVersion = (await this.getVersionAtCommit(referenceCommit)) || '0.0.0';
             // Check if we should force bump based on branch state
@@ -123,29 +123,6 @@ class DiscoveryService {
             const errorMessage = error instanceof Error ? error.message : String(error);
             core.error(`Failed to find tag-based reference: ${errorMessage}`);
             throw new Error(`Reference point discovery failed: ${errorMessage}`);
-        }
-    }
-    /**
-     * Find the last non-merge commit on a branch.
-     */
-    async findLastNonMergeCommit(branch) {
-        try {
-            const log = await git.log({
-                from: branch,
-                maxCount: 100, // Look at last 100 commits
-            });
-            // Find first non-merge commit
-            for (const commit of log.all) {
-                if (!commit.message.startsWith('Merge ')) {
-                    return commit.hash;
-                }
-            }
-            // Fallback to latest commit if no non-merge found
-            return log.latest?.hash || 'HEAD';
-        }
-        catch (error) {
-            core.warning(`Failed to find last non-merge commit on ${branch}, using HEAD`);
-            return 'HEAD';
         }
     }
     /**

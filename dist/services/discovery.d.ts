@@ -17,10 +17,6 @@ export declare class DiscoveryService {
      */
     private findTagBasedReference;
     /**
-     * Find the last non-merge commit on a branch.
-     */
-    private findLastNonMergeCommit;
-    /**
      * Get the current branch name.
      */
     private getCurrentBranch;

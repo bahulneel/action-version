@@ -112,31 +112,6 @@ export class DiscoveryService {
   }
 
   /**
-   * Find the last non-merge commit on a branch.
-   */
-  private async findLastNonMergeCommit(branch: string): Promise<string> {
-    try {
-      const log = await git.log({
-        from: branch,
-        maxCount: 100, // Look at last 100 commits
-      })
-
-      // Find first non-merge commit
-      for (const commit of log.all) {
-        if (!commit.message.startsWith('Merge ')) {
-          return commit.hash
-        }
-      }
-
-      // Fallback to latest commit if no non-merge found
-      return log.latest?.hash || 'HEAD'
-    } catch (error) {
-      core.warning(`Failed to find last non-merge commit on ${branch}, using HEAD`)
-      return 'HEAD'
-    }
-  }
-
-  /**
    * Get the current branch name.
    */
   private async getCurrentBranch(): Promise<string> {

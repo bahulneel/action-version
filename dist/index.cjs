@@ -514,7 +514,7 @@ if (require.main === require.cache[eval('__filename')]) {
     });
 }
 exports["default"] = main;
-//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.js.map
 
 /***/ }),
 
@@ -737,9 +737,9 @@ class DiscoveryService {
             // Check if we're on the base branch (finalization scenario)
             const currentBranch = await this.getCurrentBranch();
             const shouldFinalizeVersions = currentBranch === baseBranch;
-            // Find last non-merge commit on base branch
-            const branch = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`;
-            const referenceCommit = await this.findLastNonMergeCommit(branch);
+            // Find the merge base (last common ancestor) between current branch and base branch
+            const mergeBase = await git.raw(['merge-base', currentBranch, baseBranch]);
+            const referenceCommit = mergeBase.trim();
             // Get version at that commit
             const referenceVersion = (await this.getVersionAtCommit(referenceCommit)) || '0.0.0';
             // Check if we should force bump based on branch state
@@ -795,29 +795,6 @@ class DiscoveryService {
             const errorMessage = error instanceof Error ? error.message : String(error);
             core.error(`Failed to find tag-based reference: ${errorMessage}`);
             throw new Error(`Reference point discovery failed: ${errorMessage}`);
-        }
-    }
-    /**
-     * Find the last non-merge commit on a branch.
-     */
-    async findLastNonMergeCommit(branch) {
-        try {
-            const log = await git.log({
-                from: branch,
-                maxCount: 100, // Look at last 100 commits
-            });
-            // Find first non-merge commit
-            for (const commit of log.all) {
-                if (!commit.message.startsWith('Merge ')) {
-                    return commit.hash;
-                }
-            }
-            // Fallback to latest commit if no non-merge found
-            return log.latest?.hash || 'HEAD';
-        }
-        catch (error) {
-            core.warning(`Failed to find last non-merge commit on ${branch}, using HEAD`);
-            return 'HEAD';
         }
     }
     /**
@@ -2989,7 +2966,7 @@ function isGitOperationStrategyType(value) {
 function isPackageManagerType(value) {
     return ['npm', 'yarn', 'pnpm'].includes(value);
 }
-//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.js.map
 
 /***/ }),
 
@@ -6514,7 +6491,7 @@ class HttpClient {
 }
 exports.HttpClient = HttpClient;
 const lowercaseKeys = (obj) => Object.keys(obj).reduce((c, k) => ((c[k.toLowerCase()] = obj[k]), c), {});
-//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.js.map
 
 /***/ }),
 
@@ -7126,7 +7103,7 @@ function __export(m) {
 }
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 __export(__nccwpck_require__(3972));
-//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.js.map
 
 /***/ }),
 
@@ -7188,7 +7165,7 @@ exports.FOLDER = 2;
  * Constant representing either a file or a folder
  */
 exports.READABLE = exports.FILE + exports.FOLDER;
-//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.js.map
 
 /***/ }),
 
@@ -7254,7 +7231,7 @@ exports.createDeferred = deferred;
  ```
  */
 exports["default"] = deferred;
-//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.js.map
 
 /***/ }),
 
@@ -16804,7 +16781,7 @@ var { gitP: gitP2 } = (init_promise_wrapped(), __toCommonJS(promise_wrapped_expo
 var { esModuleFactory: esModuleFactory2, gitInstanceFactory: gitInstanceFactory2, gitExportFactory: gitExportFactory2 } = (init_git_factory(), __toCommonJS(git_factory_exports));
 var simpleGit = esModuleFactory2(gitExportFactory2(gitInstanceFactory2));
 module.exports = Object.assign(simpleGit, { gitP: gitP2, simpleGit });
-//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.js.map
 
 
 /***/ }),
@@ -45653,7 +45630,7 @@ exports.glob = Object.assign(glob_, {
     unescape: minimatch_1.unescape,
 });
 exports.glob.glob = exports.glob;
-//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.js.map
 
 /***/ }),
 
@@ -48413,7 +48390,7 @@ exports.minimatch.AST = ast_js_1.AST;
 exports.minimatch.Minimatch = Minimatch;
 exports.minimatch.escape = escape_js_1.escape;
 exports.minimatch.unescape = unescape_js_1.unescape;
-//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.js.map
 
 /***/ }),
 
@@ -49479,7 +49456,7 @@ class Minipass extends node_events_1.EventEmitter {
     }
 }
 exports.Minipass = Minipass;
-//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.js.map
 
 /***/ }),
 
@@ -51500,7 +51477,7 @@ exports.Path = process.platform === 'win32' ? PathWin32 : PathPosix;
 exports.PathScurry = process.platform === 'win32' ? PathScurryWin32
     : process.platform === 'darwin' ? PathScurryDarwin
         : PathScurryPosix;
-//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.js.map
 
 /***/ }),
 
@@ -53053,7 +53030,7 @@ class LRUCache {
     }
 }
 exports.LRUCache = LRUCache;
-//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.js.map
 
 /***/ })
 
@@ -53116,4 +53093,4 @@ exports.LRUCache = LRUCache;
 /******/ 	
 /******/ })()
 ;
-//# sourceMappingURL=index.cjs.map
+//# sourceMappingURL=index.js.map
