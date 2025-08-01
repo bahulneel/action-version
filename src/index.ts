@@ -130,6 +130,20 @@ class VersionBumpApplication {
       }
     } else {
       core.info('📝 No changes to push')
+
+      // Push tags even when no commits were made (when not creating branches)
+      if (!this.outputBranch) {
+        try {
+          const simpleGit = (await import('simple-git')).default
+          const git = simpleGit()
+          core.info(`[git] Pushing tags only`)
+          await git.pushTags()
+          core.info(`[git] Successfully pushed tags`)
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          core.warning(`Failed to push tags: ${errorMessage}`)
+        }
+      }
     }
 
     // Write summary to GitHub Actions (only if in GitHub Actions environment)
