@@ -56,17 +56,21 @@ class VersionBumpApplication {
 
       this.hasBumped = results.hasBumped
 
-      // Step 7: Create tag for root package if version bumps occurred and we're not branching
-      if (this.hasBumped && !config.shouldCreateBranch) {
-        // Get the bumped version from results or use current root version
+      // Step 7: Create tag for root package if version is greater than latest tag and we're not branching
+      if (!config.shouldCreateBranch) {
         const rootPackageName = rootPkg.name || 'root'
-        const bumpedVersion = results.bumped[rootPackageName]?.version || rootPkg.version
-        const isPrerelease = bumpedVersion.includes('-')
-        await gitStrategy.tagVersion(
-          bumpedVersion,
+        const currentVersion = results.bumped[rootPackageName]?.version || rootPkg.version
+        const isPrerelease = currentVersion.includes('-')
+
+        // Only tag if this is a new version (greater than latest tag)
+        const shouldTag = await this.shouldCreateTag(
+          currentVersion,
           isPrerelease,
-          config.tagPrereleases || !isPrerelease
+          config.tagPrereleases
         )
+        if (shouldTag) {
+          await gitStrategy.tagVersion(currentVersion, isPrerelease, true)
+        }
       }
 
       // Step 8: Generate comprehensive summary
@@ -153,6 +157,43 @@ class VersionBumpApplication {
     core.exportVariable('VERSION_BUMP_PACKAGES_UPDATED', results.totalPackages)
     core.exportVariable('VERSION_BUMP_CHANGES_MADE', this.hasBumped)
     core.exportVariable('VERSION_BUMP_STRATEGY', config.strategy)
+  }
+
+  /**
+   * Determine if we should create a tag for the current version.
+   */
+  private async shouldCreateTag(
+    currentVersion: string,
+    isPrerelease: boolean,
+    tagPrereleases: boolean
+  ): Promise<boolean> {
+    try {
+      const simpleGit = (await import('simple-git')).default
+      const git = simpleGit()
+
+      // Get latest tag
+      const tags = await git.tags(['--sort=-v:refname'])
+      const latestTag = tags.latest
+
+      if (!latestTag) {
+        // No tags exist, so this is the first version
+        return !isPrerelease || tagPrereleases
+      }
+
+      // Compare current version with latest tag
+      const latestVersion = latestTag.replace(/^v/, '')
+      const semver = (await import('semver')).default
+
+      if (semver.gt(currentVersion, latestVersion)) {
+        // Current version is greater than latest tag
+        return !isPrerelease || tagPrereleases
+      }
+
+      return false
+    } catch (error) {
+      core.warning(`Failed to check if should create tag: ${error}`)
+      return false
+    }
   }
 }
 
