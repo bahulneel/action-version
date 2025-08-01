@@ -80,7 +80,7 @@ export class ConsoleSummaryStrategy extends BaseSummaryStrategy {
     }
 
     // Branch management recommendations
-    if (config.branchCleanup === 'keep' && results.totalPackages > 0) {
+    if (config.branchCleanup === 'keep' && results.totalPackages > 0 && config.shouldCreateBranch) {
       recommendations.push(
         'Consider using `prune` or `semantic` branch cleanup to keep workspace clean'
       )
