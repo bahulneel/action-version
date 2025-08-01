@@ -70,11 +70,22 @@ class DiscoveryService {
             // Ensure we have the remote branch
             try {
                 await git.fetch('origin', baseBranch.replace('origin/', ''));
+                core.debug(`Fetched ${baseBranch} from origin`);
             }
             catch (fetchError) {
                 core.warning(`Failed to fetch ${baseBranch}: ${fetchError}`);
             }
-            const mergeBase = await git.raw(['merge-base', currentBranch, remoteBaseBranch]);
+            // Debug: Check if branches exist
+            try {
+                const branches = await git.branch(['-a']);
+                core.debug(`Current branch: ${currentBranch}`);
+                core.debug(`Looking for remote branch: ${remoteBaseBranch}`);
+                core.debug(`Available branches: ${branches.all.join(', ')}`);
+            }
+            catch (branchError) {
+                core.debug(`Failed to list branches: ${branchError}`);
+            }
+            const mergeBase = await git.raw(['merge-base', remoteBaseBranch, 'HEAD']);
             const referenceCommit = mergeBase.trim();
             if (!referenceCommit) {
                 throw new Error(`Failed to find merge base between ${currentBranch} and ${remoteBaseBranch}`);
@@ -94,8 +105,30 @@ class DiscoveryService {
         catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             core.warning(`Failed to find branch-based reference: ${errorMessage}`);
-            // Fallback to tag-based reference
-            return await this.findTagBasedReference();
+            // In branch mode, don't fall back to tags - use a different strategy
+            core.info(`🔄 Attempting alternative branch-based reference strategy`);
+            try {
+                // Fallback: Use the commit that set the version number in the base branch
+                core.info(`🔄 Fallback: Looking for last version change commit`);
+                // Find the last version change commit in the root package.json
+                const rootPackageJsonPath = 'package.json';
+                const versionCommit = await this.findLastVersionChangeCommit(rootPackageJsonPath);
+                if (versionCommit) {
+                    const referenceVersion = (await this.getVersionAtCommit(versionCommit)) || '0.0.0';
+                    const currentBranch = await this.getCurrentBranch();
+                    core.info(`Using last version change commit as reference: commit=${versionCommit}, version=${referenceVersion}`);
+                    return {
+                        referenceCommit: versionCommit,
+                        referenceVersion,
+                        shouldFinalizeVersions: currentBranch === baseBranch,
+                        shouldForceBump: false, // Don't force bump when using version commit
+                    };
+                }
+            }
+            catch (fallbackError) {
+                core.warning(`Version change commit fallback failed: ${fallbackError}`);
+            }
+            throw new Error(`Both merge-base and version commit strategies failed: ${errorMessage}`);
         }
     }
     /**
@@ -104,9 +137,20 @@ class DiscoveryService {
     async findTagBasedReference() {
         core.info('🔍 Using tag-based reference');
         try {
+            // First ensure we have all tags
+            try {
+                await git.fetch(['--tags']);
+                core.debug('Fetched all tags from remote');
+            }
+            catch (fetchError) {
+                core.warning(`Failed to fetch tags: ${fetchError}`);
+            }
             // Get latest tag
             const tags = await git.tags(['--sort=-v:refname']);
             const latestTag = tags.latest;
+            // Debug: Log all available tags
+            core.debug(`All tags found: ${tags.all.join(', ')}`);
+            core.debug(`Latest tag: ${latestTag || 'none'}`);
             if (latestTag) {
                 const referenceCommit = await git.revparse([latestTag]);
                 const referenceVersion = latestTag.replace(/^v/, ''); // Remove 'v' prefix if present
