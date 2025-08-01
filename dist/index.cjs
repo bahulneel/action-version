@@ -1028,6 +1028,7 @@ const core = __importStar(__nccwpck_require__(7484));
 const discovery_js_1 = __nccwpck_require__(5000);
 const version_js_1 = __nccwpck_require__(611);
 const version_js_2 = __nccwpck_require__(611);
+const factory_js_1 = __nccwpck_require__(7317);
 /**
  * Service responsible for orchestrating the complete version bump process.
  * Handles package discovery, version calculation, and dependency updates.
@@ -1163,34 +1164,107 @@ class VersionBumpService {
     /**
      * Process root package version bump based on workspace changes.
      */
-    async processRootPackage(rootPkg, workspaceBumped, referencePoint, _config) {
+    async processRootPackage(rootPkg, workspaceBumped, referencePoint, config) {
         if (!rootPkg.workspaces) {
             return { bumped: {}, hasBumped: false };
         }
         core.info(`🏠 Processing root package: ${rootPkg.name || 'root'}@${rootPkg.version}`);
-        // Calculate most significant bump from workspace changes
-        const workspaceBumpTypes = Object.values(workspaceBumped).map(b => b.bumpType);
+        // Get workspace bump from workspace package changes
+        const workspaceBumpTypes = Object.values(workspaceBumped).map((b) => b.bumpType);
         const workspaceBump = (0, version_js_2.getMostSignificantBumpType)(workspaceBumpTypes);
-        if (!workspaceBump) {
-            core.info('🏠 No workspace changes requiring root package bump');
+        // Get non-workspace changes (files outside workspace packages)
+        const nonWorkspaceCommits = await this.getNonWorkspaceCommits(referencePoint.referenceCommit);
+        const nonWorkspaceBump = (0, version_js_2.getMostSignificantBumpType)(nonWorkspaceCommits);
+        // Combine both workspace and non-workspace changes
+        const allBumpTypes = [...workspaceBumpTypes, ...nonWorkspaceCommits];
+        const mostSignificantBump = (0, version_js_2.getMostSignificantBumpType)(allBumpTypes);
+        if (!mostSignificantBump) {
+            core.info('🏠 No changes requiring root package bump');
             return { bumped: {}, hasBumped: false };
         }
         // Calculate historical bump type
         const historicalBump = (0, version_js_1.calculateBumpType)(referencePoint.referenceVersion, rootPkg.version);
-        core.info(`🏠 Required bump: ${workspaceBump}, Historical bump: ${historicalBump || 'none'}`);
-        // Apply version bump logic similar to workspace packages
-        // This would use the same strategy pattern logic
-        // Implementation simplified for brevity
-        return { bumped: {}, hasBumped: false };
+        core.info(`🏠 Workspace bump: ${workspaceBump || 'none'}, Non-workspace bump: ${nonWorkspaceBump || 'none'}, Combined: ${mostSignificantBump}, Historical: ${historicalBump || 'none'}`);
+        // Apply version bump using the most significant change
+        const strategy = factory_js_1.VersionBumpStrategyFactory.getStrategy(config.strategy);
+        const nextVersion = strategy.execute(rootPkg.version, mostSignificantBump, historicalBump);
+        if (!nextVersion || nextVersion === rootPkg.version) {
+            core.info('🏠 No root package version change needed');
+            return { bumped: {}, hasBumped: false };
+        }
+        // Update root package version
+        rootPkg.version = nextVersion;
+        await this.saveRootPackage(rootPkg);
+        // Commit the version change
+        await this.gitStrategy.commitVersionChange(process.cwd(), rootPkg.name || 'root', nextVersion, mostSignificantBump, config.commitMsgTemplate);
+        const result = {
+            version: nextVersion,
+            bumpType: mostSignificantBump,
+            sha: referencePoint.referenceCommit,
+        };
+        core.info(`🏠 Root package bumped to ${nextVersion} (${mostSignificantBump})`);
+        return {
+            bumped: { [rootPkg.name || 'root']: result },
+            hasBumped: true,
+        };
+    }
+    /**
+     * Get commits affecting non-workspace files.
+     */
+    async getNonWorkspaceCommits(referenceCommit) {
+        try {
+            const simpleGit = (await Promise.resolve().then(() => __importStar(__nccwpck_require__(9065)))).default;
+            const git = simpleGit();
+            // Get all commits since reference
+            const log = await git.log([`${referenceCommit}..HEAD`]);
+            // Parse commits to get bump types
+            const { parseCommits, getMostSignificantBump } = await Promise.resolve().then(() => __importStar(__nccwpck_require__(2365)));
+            const commits = parseCommits([...log.all], referenceCommit);
+            // Filter out commits that only affect workspace packages
+            const workspaceDirs = await this.getWorkspaceDirectories();
+            const nonWorkspaceBumpTypes = [];
+            for (const commit of log.all) {
+                // Check if this commit affects files outside workspace directories
+                const files = await git.diff([`${commit.hash}~1..${commit.hash}`, '--name-only']);
+                const hasNonWorkspaceChanges = files.split('\n').some((file) => {
+                    if (!file.trim())
+                        return false;
+                    return !workspaceDirs.some((dir) => file.startsWith(dir));
+                });
+                if (hasNonWorkspaceChanges) {
+                    // Get bump type for this commit
+                    const commitInfo = commits.find((c) => c.header === commit.message.split('\n')[0]);
+                    if (commitInfo) {
+                        const bumpType = getMostSignificantBump([commitInfo]);
+                        if (bumpType) {
+                            nonWorkspaceBumpTypes.push(bumpType);
+                        }
+                    }
+                }
+            }
+            return nonWorkspaceBumpTypes;
+        }
+        catch (error) {
+            core.warning(`Failed to get non-workspace commits: ${error}`);
+            return [];
+        }
+    }
+    /**
+     * Get workspace directories.
+     */
+    async getWorkspaceDirectories() {
+        // This would need to be implemented based on the workspace configuration
+        // For now, return common workspace patterns
+        return ['packages/', 'src/', 'lib/', 'components/'];
     }
     /**
      * Calculate statistics from bump results.
      */
     calculateStats(bumped) {
         const totalPackages = Object.keys(bumped).length;
-        const prereleasePackages = Object.values(bumped).filter(b => this.isPrerelease(b.version)).length;
+        const prereleasePackages = Object.values(bumped).filter((b) => this.isPrerelease(b.version)).length;
         const releasePackages = totalPackages - prereleasePackages;
-        const finalizedPackages = Object.values(bumped).filter(b => b.bumpType === 'release').length;
+        const finalizedPackages = Object.values(bumped).filter((b) => b.bumpType === 'release').length;
         return {
             totalPackages,
             releasePackages,

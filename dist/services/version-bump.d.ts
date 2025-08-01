@@ -43,6 +43,14 @@ export declare class VersionBumpService {
      */
     private processRootPackage;
     /**
+     * Get commits affecting non-workspace files.
+     */
+    private getNonWorkspaceCommits;
+    /**
+     * Get workspace directories.
+     */
+    private getWorkspaceDirectories;
+    /**
      * Calculate statistics from bump results.
      */
     private calculateStats;
