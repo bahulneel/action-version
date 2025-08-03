@@ -2894,12 +2894,7 @@ class LastVersionCommitTactic {
                 maxCount: 'number',
             });
             const maxCount = tacticOptions.maxCount || 1;
-            const gitCommand = [
-                'log',
-                '-L',
-                `/"version":/,+1:${packageJsonPath}`,
-                `--max-count=${maxCount}`,
-            ];
+            const gitCommand = ['log', '-L', `/version/,+1:${packageJsonPath}`, `--max-count=${maxCount}`];
             core.debug(`Executing git command: ${gitCommand.join(' ')}`);
             const logOutput = await git.raw(gitCommand);
             if (logOutput.trim()) {
