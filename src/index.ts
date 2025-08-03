@@ -16,6 +16,7 @@ import { SummaryService } from './services/summary.js'
 class VersionBumpApplication {
   private exitCode = 0
   private outputBranch: string | undefined
+  private tempRef: string | undefined
   private hasBumped = false
 
   /**
@@ -34,6 +35,7 @@ class VersionBumpApplication {
       // Step 2: Setup git and determine branches
       const gitSetup = await setupGit(config.shouldCreateBranch, config.branchTemplate)
       this.outputBranch = gitSetup.newBranch
+      this.tempRef = gitSetup.tempRef
 
       // Step 3: Load root package and initialize services
       const { pkg: rootPkg } = await findRootPackage()
@@ -146,21 +148,21 @@ class VersionBumpApplication {
       }
     }
 
-    // Clean up the temporary branch if it was created
-    if (this.outputBranch) {
+    // Clean up the temporary ref if it was created
+    if (this.tempRef) {
       try {
         const simpleGit = (await import('simple-git')).default
         const git = simpleGit()
-        core.info(`[git] Cleaning up temporary branch ${this.outputBranch}`)
-        await git.deleteLocalBranch(this.outputBranch, true)
-        core.debug(`[git] Successfully deleted temporary branch ${this.outputBranch}`)
+        core.info(`[git] Cleaning up temporary ref ${this.tempRef}`)
+        await git.raw(['update-ref', '-d', this.tempRef])
+        core.debug(`[git] Successfully deleted temporary ref ${this.tempRef}`)
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        // Branch not existing during cleanup is expected (might have been deleted already)
+        // Ref not existing during cleanup is expected
         if (!errorMessage.includes('not found') && !errorMessage.includes('does not exist')) {
-          core.warning(`Failed to delete temporary branch ${this.outputBranch}: ${errorMessage}`)
+          core.warning(`Failed to delete temporary ref ${this.tempRef}: ${errorMessage}`)
         } else {
-          core.debug(`[git] Temporary branch ${this.outputBranch} already cleaned up`)
+          core.debug(`[git] Temporary ref ${this.tempRef} already cleaned up`)
         }
       }
     }

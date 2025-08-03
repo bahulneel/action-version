@@ -173,6 +173,7 @@ export interface BuildDepGraphResult {
 export interface GitSetupResult {
   readonly currentBranch: string
   readonly newBranch: string | undefined
+  readonly tempRef?: string
 }
 
 // Validation interfaces
