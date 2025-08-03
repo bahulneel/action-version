@@ -146,6 +146,25 @@ class VersionBumpApplication {
       }
     }
 
+    // Clean up the temporary branch if it was created
+    if (this.outputBranch) {
+      try {
+        const simpleGit = (await import('simple-git')).default
+        const git = simpleGit()
+        core.info(`[git] Cleaning up temporary branch ${this.outputBranch}`)
+        await git.deleteLocalBranch(this.outputBranch, true)
+        core.debug(`[git] Successfully deleted temporary branch ${this.outputBranch}`)
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        // Branch not existing during cleanup is expected (might have been deleted already)
+        if (!errorMessage.includes('not found') && !errorMessage.includes('does not exist')) {
+          core.warning(`Failed to delete temporary branch ${this.outputBranch}: ${errorMessage}`)
+        } else {
+          core.debug(`[git] Temporary branch ${this.outputBranch} already cleaned up`)
+        }
+      }
+    }
+
     // Write summary to GitHub Actions (only if in GitHub Actions environment)
     if (process.env.GITHUB_STEP_SUMMARY) {
       await core.summary.write({ overwrite: true })
