@@ -36,7 +36,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MergeBaseTactic = void 0;
 const core = __importStar(require("@actions/core"));
 const simple_git_1 = require("simple-git");
-const tactic_config_js_1 = require("../../../utils/tactic-config.js");
 const git = (0, simple_git_1.simpleGit)();
 /**
  * MergeBaseTactic - Uses git merge-base to find the common ancestor between current branch and base branch.
@@ -89,38 +88,12 @@ class MergeBaseTactic {
                 }
             }
             // Find merge base between remote base branch and HEAD
-            const tacticOptions = tactic_config_js_1.TacticConfig.getTacticOptions(this.name, {
-                lookbackCommits: 'number',
-            });
-            const lookback = tacticOptions.lookbackCommits || context.lookbackCommits || 0;
-            let mergeBase = null;
-            if (lookback > 0) {
-                // Try to find merge base with lookback
-                const baseHashes = await this.getBaseHashes(lookback);
-                core.debug(`Checking ${baseHashes.length} recent commits for merge base`);
-                // Iterate through recent commits to find common ancestor
-                for (const commitHash of baseHashes) {
-                    core.debug(`Checking commit ${commitHash.substring(0, 8)} for merge base`);
-                    const commonCommit = await this.commonCommit(remoteBaseBranch, commitHash);
-                    if (commonCommit && commonCommit !== commitHash) {
-                        core.debug(`Found merge base ${commonCommit.substring(0, 8)} using lookback commit ${commitHash.substring(0, 8)}`);
-                        mergeBase = commonCommit;
-                        break;
-                    }
-                    else {
-                        core.debug(`No common ancestor found for commit ${commitHash.substring(0, 8)}`);
-                    }
-                }
-            }
-            // If no merge base found yet, try standard approach
-            if (!mergeBase) {
-                mergeBase = await this.commonCommit(remoteBaseBranch, 'HEAD');
-            }
+            const mergeBase = await this.commonCommit(remoteBaseBranch, 'HEAD');
             if (!mergeBase) {
                 return {
                     applied: true,
                     success: false,
-                    message: `No common ancestor found between ${context.currentBranch} and ${remoteBaseBranch}${lookback > 0 ? ` (searched ${lookback} commits back)` : ''}`,
+                    message: `No common ancestor found between ${context.currentBranch} and ${remoteBaseBranch}`,
                     ...(context.gitInfo && { context: { gitInfo: context.gitInfo } }),
                 };
             }
@@ -137,7 +110,7 @@ class MergeBaseTactic {
                     shouldFinalizeVersions,
                     shouldForceBump,
                 },
-                message: `Found merge base: ${mergeBase.substring(0, 8)} (version: ${referenceVersion})${lookback > 0 ? ` (with ${lookback} commit lookback)` : ''}`,
+                message: `Found merge base: ${mergeBase.substring(0, 8)} (version: ${referenceVersion})`,
                 ...(context.gitInfo && { context: { gitInfo: context.gitInfo } }),
             };
         }
@@ -167,20 +140,12 @@ class MergeBaseTactic {
             };
         }
     }
-    async getBaseHashes(count) {
-        try {
-            const recentCommits = await git.raw(['log', '--oneline', '--format=%H', `-${count}`]);
-            return recentCommits.trim().split('\n').filter(Boolean);
-        }
-        catch (error) {
-            core.debug(`Failed to get base hashes: ${error}`);
-            return [];
-        }
-    }
     async commonCommit(base, target) {
         try {
+            core.debug(`Running: git merge-base ${base} ${target}`);
             const mergeBaseOutput = await git.raw(['merge-base', base, target]);
             const mergeBase = mergeBaseOutput.trim();
+            core.debug(`Merge base output: "${mergeBase}"`);
             return mergeBase || null;
         }
         catch (error) {
