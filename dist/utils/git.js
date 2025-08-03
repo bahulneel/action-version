@@ -66,7 +66,7 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
     // Try to unshallow if this is a shallow repository
     try {
         await git.fetch(['--unshallow']);
-        core.debug(`[git] Successfully unshallowed repository`);
+        core.info(`[git] Successfully unshallowed repository`);
     }
     catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
