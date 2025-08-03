@@ -72,6 +72,45 @@ export class LastVersionCommitTactic
 
   private async findLastVersionChangeCommit(packageJsonPath: string): Promise<string | null> {
     try {
+      // Use git log -L to directly track version field changes
+      // This is much more efficient than scanning all commits
+      const logOutput = await git.raw([
+        'log',
+        '-L',
+        `/"version":/,+1:${packageJsonPath}`,
+        '--max-count=1',
+      ])
+
+      if (!logOutput.trim()) {
+        core.debug(`No version changes found in ${packageJsonPath}`)
+        return null
+      }
+
+      // Parse the commit hash from the diff output
+      // Format: <commit-hash>\ndiff --git a/package.json b/package.json
+      const lines = logOutput.trim().split('\n')
+      const firstLine = lines[0]
+
+      // Extract commit hash from first line (should be 40 chars)
+      if (firstLine && firstLine.match(/^[a-f0-9]{40}$/)) {
+        const commitHash = firstLine
+        core.debug(`Found version change in commit: ${commitHash.substring(0, 8)}`)
+        return commitHash
+      }
+
+      return null
+    } catch (error) {
+      core.debug(`Failed to find last version change for ${packageJsonPath} using -L: ${error}`)
+
+      // Fallback to the old method if -L fails for any reason
+      return this.findLastVersionChangeCommitFallback(packageJsonPath)
+    }
+  }
+
+  private async findLastVersionChangeCommitFallback(
+    packageJsonPath: string
+  ): Promise<string | null> {
+    try {
       const log = await git.log({
         file: packageJsonPath,
         maxCount: 50,

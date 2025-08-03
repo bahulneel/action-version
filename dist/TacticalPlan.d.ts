@@ -5,6 +5,7 @@ import type { Tactic, TacticalPlanInterface } from './types/tactics.js';
 export declare class TacticalPlan<T, C> implements TacticalPlanInterface<T, C> {
     private tactics;
     readonly description?: string | undefined;
+    private failureLog;
     constructor(tactics: Tactic<T, C>[], description?: string);
     /**
      * Execute this tactical plan.

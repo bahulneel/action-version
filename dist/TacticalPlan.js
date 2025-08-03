@@ -41,6 +41,7 @@ const core = __importStar(require("@actions/core"));
 class TacticalPlan {
     tactics;
     description;
+    failureLog = [];
     constructor(tactics, description) {
         this.tactics = tactics;
         this.description = description;
@@ -54,13 +55,15 @@ class TacticalPlan {
         }
         core.info(`🎯 Executing tactical plan with ${this.tactics.length} tactics`);
         if (this.description) {
-            core.debug(`📋 Plan: ${this.description}`);
+            core.info(`📋 Plan: ${this.description}`);
         }
         for (const tactic of this.tactics) {
-            core.debug(`🎯 Executing tactic: ${tactic.name}`);
+            core.info(`🎯 Attempting tactic: ${tactic.name}`);
             // Assess if this tactic is applicable
             if (!tactic.assess(context)) {
-                core.debug(`⏭️ ${tactic.name}: Not applicable to this context`);
+                const message = `Not applicable to this context`;
+                core.info(`⏭️ ${tactic.name}: ${message}`);
+                this.failureLog.push(`${tactic.name}: ${message}`);
                 continue;
             }
             try {
@@ -74,19 +77,28 @@ class TacticalPlan {
                     return result.result;
                 }
                 else if (result.applied && !result.success) {
-                    core.debug(`❌ ${tactic.name}: ${result.message || 'Failed'}`);
+                    const failureMessage = result.message || 'Failed';
+                    core.warning(`❌ ${tactic.name}: ${failureMessage}`);
+                    this.failureLog.push(`${tactic.name}: ${failureMessage}`);
                 }
                 else {
-                    core.debug(`⏭️ ${tactic.name}: ${result.message || 'Not applied'}`);
+                    const skipMessage = result.message || 'Not applied';
+                    core.info(`⏭️ ${tactic.name}: ${skipMessage}`);
+                    this.failureLog.push(`${tactic.name}: ${skipMessage}`);
                 }
             }
             catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
-                core.debug(`❌ ${tactic.name}: Error - ${errorMessage}`);
+                core.warning(`❌ ${tactic.name}: Error - ${errorMessage}`);
+                this.failureLog.push(`${tactic.name}: Error - ${errorMessage}`);
                 // Continue to next tactic on error
             }
         }
-        throw new Error(`All ${this.tactics.length} tactics in plan exhausted`);
+        // Create detailed failure summary
+        const failureSummary = this.failureLog.length > 0
+            ? `\nTactical failures:\n${this.failureLog.map((f) => `  • ${f}`).join('\n')}`
+            : '';
+        throw new Error(`All ${this.tactics.length} tactics in plan exhausted${failureSummary}`);
     }
 }
 exports.TacticalPlan = TacticalPlan;
