@@ -434,6 +434,7 @@ const summary_js_1 = __nccwpck_require__(3182);
 class VersionBumpApplication {
     exitCode = 0;
     outputBranch;
+    tempRef;
     hasBumped = false;
     /**
      * Run the complete version bump process.
@@ -447,6 +448,7 @@ class VersionBumpApplication {
             // Step 2: Setup git and determine branches
             const gitSetup = await (0, git_js_1.setupGit)(config.shouldCreateBranch, config.branchTemplate);
             this.outputBranch = gitSetup.newBranch;
+            this.tempRef = gitSetup.tempRef;
             // Step 3: Load root package and initialize services
             const { pkg: rootPkg } = await (0, workspace_js_1.findRootPackage)();
             const packageManager = factory_js_2.PackageManagerFactory.getPackageManager();
@@ -545,23 +547,23 @@ class VersionBumpApplication {
                 }
             }
         }
-        // Clean up the temporary branch if it was created
-        if (this.outputBranch) {
+        // Clean up the temporary ref if it was created
+        if (this.tempRef) {
             try {
                 const simpleGit = (await Promise.resolve().then(() => __importStar(__nccwpck_require__(9065)))).default;
                 const git = simpleGit();
-                core.info(`[git] Cleaning up temporary branch ${this.outputBranch}`);
-                await git.deleteLocalBranch(this.outputBranch, true);
-                core.debug(`[git] Successfully deleted temporary branch ${this.outputBranch}`);
+                core.info(`[git] Cleaning up temporary ref ${this.tempRef}`);
+                await git.raw(['update-ref', '-d', this.tempRef]);
+                core.debug(`[git] Successfully deleted temporary ref ${this.tempRef}`);
             }
             catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
-                // Branch not existing during cleanup is expected (might have been deleted already)
+                // Ref not existing during cleanup is expected
                 if (!errorMessage.includes('not found') && !errorMessage.includes('does not exist')) {
-                    core.warning(`Failed to delete temporary branch ${this.outputBranch}: ${errorMessage}`);
+                    core.warning(`Failed to delete temporary ref ${this.tempRef}: ${errorMessage}`);
                 }
                 else {
-                    core.debug(`[git] Temporary branch ${this.outputBranch} already cleaned up`);
+                    core.debug(`[git] Temporary ref ${this.tempRef} already cleaned up`);
                 }
             }
         }
@@ -4053,10 +4055,10 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
     // Configure git user
     await git.addConfig('user.name', 'github-actions[bot]');
     await git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com');
-    // Fetch latest changes
+    // Fetch latest changes with aggressive pruning
     try {
-        core.debug(`[git] Fetching latest changes from origin`);
-        await git.fetch(['--prune', 'origin']);
+        core.debug(`[git] Fetching latest changes from origin with pruning`);
+        await git.fetch(['--prune', '--prune-tags', 'origin']);
         core.debug(`[git] Successfully fetched from origin`);
     }
     catch (error) {
@@ -4064,42 +4066,33 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
         core.warning(`[git] Failed to fetch from origin: ${errorMessage}`);
     }
     const currentBranch = process.env?.GITHUB_HEAD_REF || process.env?.GITHUB_REF_NAME || 'main';
-    const newBranch = shouldCreateBranch
-        ? interpolateBranchTemplate(branchTemplate, { version: currentBranch })
-        : undefined;
-    try {
-        if (newBranch) {
-            // Check if the branch already exists and delete it (this is rare but can happen)
-            try {
-                const branches = await git.branch();
-                if (branches.all.includes(newBranch)) {
-                    core.info(`[git] Branch ${newBranch} already exists, deleting it first`);
-                    await git.deleteLocalBranch(newBranch, true);
-                }
-            }
-            catch (error) {
-                // Not finding the branch is expected, only log if it's a different error
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                if (!errorMessage.includes('not found') && !errorMessage.includes('does not exist')) {
-                    core.debug(`[git] Error checking for existing branch ${newBranch}: ${errorMessage}`);
-                }
-            }
-            core.info(`[git] Checking out ${newBranch} from ${currentBranch}`);
-            await git.checkoutBranch(newBranch, currentBranch);
-            core.debug(`[git] Successfully checked out ${newBranch}`);
+    if (shouldCreateBranch) {
+        // Create a unique ref instead of a branch to avoid cleanup issues
+        const timestamp = Date.now();
+        const refName = `refs/heads/temp-${timestamp}`;
+        const displayName = interpolateBranchTemplate(branchTemplate, { version: currentBranch });
+        core.info(`[git] Creating temporary ref ${refName} from ${currentBranch}`);
+        try {
+            // Create the ref directly without checking out
+            await git.raw(['update-ref', refName, currentBranch]);
+            core.debug(`[git] Successfully created ref ${refName}`);
+            // Checkout the ref
+            await git.checkout(refName);
+            core.debug(`[git] Successfully checked out ${refName}`);
+            return { currentBranch, newBranch: displayName, tempRef: refName };
         }
-        else {
-            core.info(`[git] Checking out ${currentBranch}`);
-            await git.checkout(currentBranch);
-            core.debug(`[git] Successfully checked out ${currentBranch}`);
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.error(`[git] Failed to create ref: ${errorMessage}`);
+            throw new Error(`Failed to create ref: ${errorMessage}`);
         }
     }
-    catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        core.error(`[git] Failed to checkout branch: ${errorMessage}`);
-        throw new Error(`Failed to checkout branch: ${errorMessage}`);
+    else {
+        core.info(`[git] Checking out ${currentBranch}`);
+        await git.checkout(currentBranch);
+        core.debug(`[git] Successfully checked out ${currentBranch}`);
+        return { currentBranch, newBranch: undefined };
     }
-    return { currentBranch, newBranch };
 }
 /**
  * Get commits affecting a specific directory since a reference point.
