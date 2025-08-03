@@ -66,49 +66,13 @@ export class MergeBaseTactic implements Tactic<ReferencePointResult, ReferenceDi
       }
 
       // Find merge base between remote base branch and HEAD
-      const tacticOptions = TacticConfig.getTacticOptions(this.name, {
-        lookbackCommits: 'number',
-      })
-      const lookback =
-        (tacticOptions.lookbackCommits as number) || (context.lookbackCommits as number) || 0
-      let mergeBase: string | null = null
-
-      if (lookback > 0) {
-        // Try to find merge base with lookback
-        const baseHashes = await this.getBaseHashes(lookback)
-        core.debug(`Checking ${baseHashes.length} recent commits for merge base`)
-
-        // Iterate through recent commits to find common ancestor
-        for (const commitHash of baseHashes) {
-          core.debug(`Checking commit ${commitHash.substring(0, 8)} for merge base`)
-          const commonCommit = await this.commonCommit(remoteBaseBranch, commitHash)
-          if (commonCommit && commonCommit !== commitHash) {
-            core.debug(
-              `Found merge base ${commonCommit.substring(
-                0,
-                8
-              )} using lookback commit ${commitHash.substring(0, 8)}`
-            )
-            mergeBase = commonCommit
-            break
-          } else {
-            core.debug(`No common ancestor found for commit ${commitHash.substring(0, 8)}`)
-          }
-        }
-      }
-
-      // If no merge base found yet, try standard approach
-      if (!mergeBase) {
-        mergeBase = await this.commonCommit(remoteBaseBranch, 'HEAD')
-      }
+      const mergeBase = await this.commonCommit(remoteBaseBranch, 'HEAD')
 
       if (!mergeBase) {
         return {
           applied: true,
           success: false,
-          message: `No common ancestor found between ${
-            context.currentBranch
-          } and ${remoteBaseBranch}${lookback > 0 ? ` (searched ${lookback} commits back)` : ''}`,
+          message: `No common ancestor found between ${context.currentBranch} and ${remoteBaseBranch}`,
           ...(context.gitInfo && { context: { gitInfo: context.gitInfo } }),
         }
       }
@@ -127,9 +91,7 @@ export class MergeBaseTactic implements Tactic<ReferencePointResult, ReferenceDi
           shouldFinalizeVersions,
           shouldForceBump,
         },
-        message: `Found merge base: ${mergeBase.substring(0, 8)} (version: ${referenceVersion})${
-          lookback > 0 ? ` (with ${lookback} commit lookback)` : ''
-        }`,
+        message: `Found merge base: ${mergeBase.substring(0, 8)} (version: ${referenceVersion})`,
         ...(context.gitInfo && { context: { gitInfo: context.gitInfo } }),
       }
     } catch (error) {
@@ -159,20 +121,12 @@ export class MergeBaseTactic implements Tactic<ReferencePointResult, ReferenceDi
     }
   }
 
-  private async getBaseHashes(count: number): Promise<string[]> {
-    try {
-      const recentCommits = await git.raw(['log', '--oneline', '--format=%H', `-${count}`])
-      return recentCommits.trim().split('\n').filter(Boolean)
-    } catch (error) {
-      core.debug(`Failed to get base hashes: ${error}`)
-      return []
-    }
-  }
-
   private async commonCommit(base: string, target: string): Promise<string | null> {
     try {
+      core.debug(`Running: git merge-base ${base} ${target}`)
       const mergeBaseOutput = await git.raw(['merge-base', base, target])
       const mergeBase = mergeBaseOutput.trim()
+      core.debug(`Merge base output: "${mergeBase}"`)
       return mergeBase || null
     } catch (error) {
       core.debug(`Failed to find common commit between ${base} and ${target}: ${error}`)
