@@ -3,7 +3,6 @@ import { simpleGit } from 'simple-git'
 import type { Tactic, TacticResult } from '../../../types/tactics.js'
 import type { ReferencePointResult } from '../../../types/index.js'
 import type { ReferenceDiscoveryContext } from './types.js'
-import { TacticConfig } from '../../../utils/tactic-config.js'
 
 const git = simpleGit()
 
