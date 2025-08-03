@@ -39,7 +39,7 @@ export async function setupGit(
 
     try {
       // Create the ref directly without checking out
-      await git.raw(['update-ref', refName, currentBranch])
+      await git.raw('update-ref', refName, currentBranch)
       core.debug(`[git] Successfully created ref ${refName}`)
 
       // Checkout the ref

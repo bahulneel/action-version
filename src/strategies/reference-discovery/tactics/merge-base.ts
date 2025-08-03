@@ -123,7 +123,7 @@ export class MergeBaseTactic implements Tactic<ReferencePointResult, ReferenceDi
   private async commonCommit(base: string, target: string): Promise<string | null> {
     try {
       core.debug(`Running: git merge-base ${base} ${target}`)
-      const mergeBaseOutput = await git.raw(['merge-base', base, target])
+      const mergeBaseOutput = await git.raw('merge-base', base, target)
       const mergeBase = mergeBaseOutput.trim()
       core.debug(`Merge base output: "${mergeBase}"`)
       return mergeBase || null

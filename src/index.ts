@@ -154,7 +154,7 @@ class VersionBumpApplication {
         const simpleGit = (await import('simple-git')).default
         const git = simpleGit()
         core.info(`[git] Cleaning up temporary ref ${this.tempRef}`)
-        await git.raw(['update-ref', '-d', this.tempRef])
+        await git.raw('update-ref', '-d', this.tempRef)
         core.debug(`[git] Successfully deleted temporary ref ${this.tempRef}`)
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)

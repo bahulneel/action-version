@@ -83,7 +83,7 @@ export class LastVersionCommitTactic
       const gitCommand = ['log', '-L', `/version/,+1:${packageJsonPath}`, `--max-count=${maxCount}`]
       core.debug(`Executing git command: ${gitCommand.join(' ')}`)
 
-      const logOutput = await git.raw(gitCommand)
+      const logOutput = await git.raw(...gitCommand)
 
       if (logOutput.trim()) {
         core.debug(`Git log output (first 200 chars): ${logOutput.substring(0, 200)}`)
