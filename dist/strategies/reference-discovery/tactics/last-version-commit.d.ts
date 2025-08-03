@@ -15,6 +15,7 @@ export declare class LastVersionCommitTactic implements Tactic<ReferencePointRes
     assess(_context: ReferenceDiscoveryContext): boolean;
     attempt(context: ReferenceDiscoveryContext): Promise<TacticResult<ReferencePointResult, ReferenceDiscoveryContext>>;
     private findLastVersionChangeCommit;
+    private findLastVersionChangeCommitFallback;
     private getVersionAtCommit;
 }
 //# sourceMappingURL=last-version-commit.d.ts.map

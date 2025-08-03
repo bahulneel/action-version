@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.LastVersionCommitTactic = void 0;
 const core = __importStar(require("@actions/core"));
 const simple_git_1 = require("simple-git");
+const tactic_config_js_1 = require("../../../utils/tactic-config.js");
 const git = (0, simple_git_1.simpleGit)();
 /**
  * LastVersionCommitTactic - Finds the last commit that changed the version field in package.json.
@@ -89,6 +90,42 @@ class LastVersionCommitTactic {
         }
     }
     async findLastVersionChangeCommit(packageJsonPath) {
+        try {
+            // Use git log -L to directly track version field changes
+            // This is much more efficient than scanning all commits
+            const tacticOptions = tactic_config_js_1.TacticConfig.getTacticOptions(this.name, {
+                maxCount: 'number',
+            });
+            const maxCount = tacticOptions.maxCount || 1;
+            const logOutput = await git.raw([
+                'log',
+                '-L',
+                `/"version":/,+1:${packageJsonPath}`,
+                `--max-count=${maxCount}`,
+            ]);
+            if (!logOutput.trim()) {
+                core.debug(`No version changes found in ${packageJsonPath}`);
+                return null;
+            }
+            // Parse the commit hash from the diff output
+            // Format: <commit-hash>\ndiff --git a/package.json b/package.json
+            const lines = logOutput.trim().split('\n');
+            const firstLine = lines[0];
+            // Extract commit hash from first line (should be 40 chars)
+            if (firstLine && firstLine.match(/^[a-f0-9]{40}$/)) {
+                const commitHash = firstLine;
+                core.debug(`Found version change in commit: ${commitHash.substring(0, 8)}`);
+                return commitHash;
+            }
+            return null;
+        }
+        catch (error) {
+            core.debug(`Failed to find last version change for ${packageJsonPath} using -L: ${error}`);
+            // Fallback to the old method if -L fails for any reason
+            return this.findLastVersionChangeCommitFallback(packageJsonPath);
+        }
+    }
+    async findLastVersionChangeCommitFallback(packageJsonPath) {
         try {
             const log = await git.log({
                 file: packageJsonPath,

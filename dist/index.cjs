@@ -48,7 +48,6 @@ const core = __importStar(__nccwpck_require__(7484));
 class TacticalPlan {
     tactics;
     description;
-    failureLog = [];
     constructor(tactics, description) {
         this.tactics = tactics;
         this.description = description;
@@ -62,15 +61,13 @@ class TacticalPlan {
         }
         core.info(`🎯 Executing tactical plan with ${this.tactics.length} tactics`);
         if (this.description) {
-            core.info(`📋 Plan: ${this.description}`);
+            core.debug(`📋 Plan: ${this.description}`);
         }
         for (const tactic of this.tactics) {
-            core.info(`🎯 Attempting tactic: ${tactic.name}`);
+            core.debug(`🎯 Executing tactic: ${tactic.name}`);
             // Assess if this tactic is applicable
             if (!tactic.assess(context)) {
-                const message = `Not applicable to this context`;
-                core.info(`⏭️ ${tactic.name}: ${message}`);
-                this.failureLog.push(`${tactic.name}: ${message}`);
+                core.debug(`⏭️ ${tactic.name}: Not applicable to this context`);
                 continue;
             }
             try {
@@ -84,28 +81,19 @@ class TacticalPlan {
                     return result.result;
                 }
                 else if (result.applied && !result.success) {
-                    const failureMessage = result.message || 'Failed';
-                    core.warning(`❌ ${tactic.name}: ${failureMessage}`);
-                    this.failureLog.push(`${tactic.name}: ${failureMessage}`);
+                    core.debug(`❌ ${tactic.name}: ${result.message || 'Failed'}`);
                 }
                 else {
-                    const skipMessage = result.message || 'Not applied';
-                    core.info(`⏭️ ${tactic.name}: ${skipMessage}`);
-                    this.failureLog.push(`${tactic.name}: ${skipMessage}`);
+                    core.debug(`⏭️ ${tactic.name}: ${result.message || 'Not applied'}`);
                 }
             }
             catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
-                core.warning(`❌ ${tactic.name}: Error - ${errorMessage}`);
-                this.failureLog.push(`${tactic.name}: Error - ${errorMessage}`);
+                core.debug(`❌ ${tactic.name}: Error - ${errorMessage}`);
                 // Continue to next tactic on error
             }
         }
-        // Create detailed failure summary
-        const failureSummary = this.failureLog.length > 0
-            ? `\nTactical failures:\n${this.failureLog.map((f) => `  • ${f}`).join('\n')}`
-            : '';
-        throw new Error(`All ${this.tactics.length} tactics in plan exhausted${failureSummary}`);
+        throw new Error(`All ${this.tactics.length} tactics in plan exhausted`);
     }
 }
 exports.TacticalPlan = TacticalPlan;
@@ -718,6 +706,21 @@ class ConfigurationService {
         const activeBranch = core.getInput('branch');
         if (activeBranch)
             result.activeBranch = activeBranch;
+        // Parse tactic-specific configuration
+        const mergebaseLookback = core.getInput('tactic_mergebase_lookbackcommits');
+        if (mergebaseLookback) {
+            const lookbackValue = parseInt(mergebaseLookback, 10);
+            if (!isNaN(lookbackValue)) {
+                result.mergebaseLookbackCommits = lookbackValue;
+            }
+        }
+        const lastversioncommitMaxCount = core.getInput('tactic_lastversioncommit_maxcount');
+        if (lastversioncommitMaxCount) {
+            const maxCountValue = parseInt(lastversioncommitMaxCount, 10);
+            if (!isNaN(maxCountValue)) {
+                result.lastversioncommitMaxCount = maxCountValue;
+            }
+        }
         return result;
     }
     /**
@@ -748,6 +751,13 @@ class ConfigurationService {
         core.info(`Branch cleanup: ${config.branchCleanup}`);
         core.info(`Commit template: ${config.commitMsgTemplate}`);
         core.info(`Dependency commit template: ${config.depCommitMsgTemplate}`);
+        // Log tactic-specific configuration
+        if (config.mergebaseLookbackCommits) {
+            core.info(`MergeBase lookback commits: ${config.mergebaseLookbackCommits}`);
+        }
+        if (config.lastversioncommitMaxCount) {
+            core.info(`LastVersionCommit max count: ${config.lastversioncommitMaxCount}`);
+        }
         core.endGroup();
     }
     /**
@@ -2589,6 +2599,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.LastVersionCommitTactic = void 0;
 const core = __importStar(__nccwpck_require__(7484));
 const simple_git_1 = __nccwpck_require__(9065);
+const tactic_config_js_1 = __nccwpck_require__(5870);
 const git = (0, simple_git_1.simpleGit)();
 /**
  * LastVersionCommitTactic - Finds the last commit that changed the version field in package.json.
@@ -2642,6 +2653,42 @@ class LastVersionCommitTactic {
         }
     }
     async findLastVersionChangeCommit(packageJsonPath) {
+        try {
+            // Use git log -L to directly track version field changes
+            // This is much more efficient than scanning all commits
+            const tacticOptions = tactic_config_js_1.TacticConfig.getTacticOptions(this.name, {
+                maxCount: 'number',
+            });
+            const maxCount = tacticOptions.maxCount || 1;
+            const logOutput = await git.raw([
+                'log',
+                '-L',
+                `/"version":/,+1:${packageJsonPath}`,
+                `--max-count=${maxCount}`,
+            ]);
+            if (!logOutput.trim()) {
+                core.debug(`No version changes found in ${packageJsonPath}`);
+                return null;
+            }
+            // Parse the commit hash from the diff output
+            // Format: <commit-hash>\ndiff --git a/package.json b/package.json
+            const lines = logOutput.trim().split('\n');
+            const firstLine = lines[0];
+            // Extract commit hash from first line (should be 40 chars)
+            if (firstLine && firstLine.match(/^[a-f0-9]{40}$/)) {
+                const commitHash = firstLine;
+                core.debug(`Found version change in commit: ${commitHash.substring(0, 8)}`);
+                return commitHash;
+            }
+            return null;
+        }
+        catch (error) {
+            core.debug(`Failed to find last version change for ${packageJsonPath} using -L: ${error}`);
+            // Fallback to the old method if -L fails for any reason
+            return this.findLastVersionChangeCommitFallback(packageJsonPath);
+        }
+    }
+    async findLastVersionChangeCommitFallback(packageJsonPath) {
         try {
             const log = await git.log({
                 file: packageJsonPath,
@@ -2727,6 +2774,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.MergeBaseTactic = void 0;
 const core = __importStar(__nccwpck_require__(7484));
 const simple_git_1 = __nccwpck_require__(9065);
+const tactic_config_js_1 = __nccwpck_require__(5870);
 const git = (0, simple_git_1.simpleGit)();
 /**
  * MergeBaseTactic - Uses git merge-base to find the common ancestor between current branch and base branch.
@@ -2779,30 +2827,50 @@ class MergeBaseTactic {
                 }
             }
             // Find merge base between remote base branch and HEAD
-            const mergeBase = await git.raw(['merge-base', remoteBaseBranch, 'HEAD']);
-            const referenceCommit = mergeBase.trim();
-            if (!referenceCommit) {
+            const tacticOptions = tactic_config_js_1.TacticConfig.getTacticOptions(this.name, {
+                lookbackCommits: 'number',
+            });
+            const lookback = tacticOptions.lookbackCommits || context.lookbackCommits || 0;
+            let mergeBase = null;
+            if (lookback > 0) {
+                // Try to find merge base with lookback
+                const baseHashes = await this.getBaseHashes(lookback);
+                // Iterate through recent commits to find common ancestor
+                for (const commitHash of baseHashes) {
+                    const commonCommit = await this.commonCommit(remoteBaseBranch, commitHash);
+                    if (commonCommit && commonCommit !== commitHash) {
+                        core.debug(`Found merge base ${commonCommit.substring(0, 8)} using lookback commit ${commitHash.substring(0, 8)}`);
+                        mergeBase = commonCommit;
+                        break;
+                    }
+                }
+            }
+            // If no merge base found yet, try standard approach
+            if (!mergeBase) {
+                mergeBase = await this.commonCommit(remoteBaseBranch, 'HEAD');
+            }
+            if (!mergeBase) {
                 return {
                     applied: true,
                     success: false,
-                    message: `No common ancestor found between ${context.currentBranch} and ${remoteBaseBranch}`,
+                    message: `No common ancestor found between ${context.currentBranch} and ${remoteBaseBranch}${lookback > 0 ? ` (searched ${lookback} commits back)` : ''}`,
                     ...(context.gitInfo && { context: { gitInfo: context.gitInfo } }),
                 };
             }
             // Get version at the merge base commit
-            const referenceVersion = (await this.getVersionAtCommit(referenceCommit)) || '0.0.0';
+            const referenceVersion = (await this.getVersionAtCommit(mergeBase)) || '0.0.0';
             const shouldFinalizeVersions = context.currentBranch === context.baseBranch;
             const shouldForceBump = !shouldFinalizeVersions && context.activeBranch !== context.baseBranch;
             return {
                 applied: true,
                 success: true,
                 result: {
-                    referenceCommit,
+                    referenceCommit: mergeBase,
                     referenceVersion,
                     shouldFinalizeVersions,
                     shouldForceBump,
                 },
-                message: `Found merge base: ${referenceCommit.substring(0, 8)} (version: ${referenceVersion})`,
+                message: `Found merge base: ${mergeBase.substring(0, 8)} (version: ${referenceVersion})${lookback > 0 ? ` (with ${lookback} commit lookback)` : ''}`,
                 ...(context.gitInfo && { context: { gitInfo: context.gitInfo } }),
             };
         }
@@ -2830,6 +2898,27 @@ class MergeBaseTactic {
                 availableBranches: [],
                 remoteExists: false,
             };
+        }
+    }
+    async getBaseHashes(count) {
+        try {
+            const recentCommits = await git.raw(['log', '--oneline', '--format=%H', `-${count}`]);
+            return recentCommits.trim().split('\n').filter(Boolean);
+        }
+        catch (error) {
+            core.debug(`Failed to get base hashes: ${error}`);
+            return [];
+        }
+    }
+    async commonCommit(base, target) {
+        try {
+            const mergeBaseOutput = await git.raw(['merge-base', base, target]);
+            const mergeBase = mergeBaseOutput.trim();
+            return mergeBase || null;
+        }
+        catch (error) {
+            core.debug(`Failed to find common commit between ${base} and ${target}: ${error}`);
+            return null;
         }
     }
     async getVersionAtCommit(commit) {
@@ -3827,6 +3916,113 @@ function interpolateBranchTemplate(template, vars) {
     });
 }
 //# sourceMappingURL=git.js.map
+
+/***/ }),
+
+/***/ 5870:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TacticConfig = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+/**
+ * Utility for parsing tactic-specific configuration from GitHub Actions inputs.
+ * Uses the pattern {tactic_name}_{option_name} for input names.
+ */
+class TacticConfig {
+    /**
+     * Get tactic-specific configuration options.
+     * @param tacticName The name of the tactic (e.g., 'MergeBase', 'LastVersionCommit')
+     * @param options Object defining the expected options and their types
+     * @returns Object with parsed configuration values
+     */
+    static getTacticOptions(tacticName, options) {
+        const result = {};
+        for (const [optionName, optionType] of Object.entries(options)) {
+            const inputName = `tactic_${tacticName.toLowerCase()}_${optionName.toLowerCase()}`;
+            const value = core.getInput(inputName);
+            if (value !== '') {
+                switch (optionType) {
+                    case 'string':
+                        result[optionName] = value;
+                        break;
+                    case 'number':
+                        const numValue = parseInt(value, 10);
+                        if (!isNaN(numValue)) {
+                            result[optionName] = numValue;
+                        }
+                        else {
+                            core.warning(`Invalid number value for ${inputName}: ${value}`);
+                        }
+                        break;
+                    case 'boolean':
+                        result[optionName] = (value === 'true' || value === '1');
+                        break;
+                }
+            }
+        }
+        return result;
+    }
+    /**
+     * Get a single tactic option value.
+     * @param tacticName The name of the tactic
+     * @param optionName The name of the option
+     * @param defaultValue Default value if not set
+     * @returns The option value or default
+     */
+    static getTacticOption(tacticName, optionName, defaultValue) {
+        const inputName = `tactic_${tacticName.toLowerCase()}_${optionName.toLowerCase()}`;
+        const value = core.getInput(inputName);
+        if (value === '') {
+            return defaultValue;
+        }
+        if (typeof defaultValue === 'number') {
+            const numValue = parseInt(value, 10);
+            return (isNaN(numValue) ? defaultValue : numValue);
+        }
+        if (typeof defaultValue === 'boolean') {
+            return (value === 'true' || value === '1' ? true : false);
+        }
+        return value;
+    }
+}
+exports.TacticConfig = TacticConfig;
+//# sourceMappingURL=tactic-config.js.map
 
 /***/ }),
 

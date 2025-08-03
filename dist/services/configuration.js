@@ -82,6 +82,21 @@ class ConfigurationService {
         const activeBranch = core.getInput('branch');
         if (activeBranch)
             result.activeBranch = activeBranch;
+        // Parse tactic-specific configuration
+        const mergebaseLookback = core.getInput('tactic_mergebase_lookbackcommits');
+        if (mergebaseLookback) {
+            const lookbackValue = parseInt(mergebaseLookback, 10);
+            if (!isNaN(lookbackValue)) {
+                result.mergebaseLookbackCommits = lookbackValue;
+            }
+        }
+        const lastversioncommitMaxCount = core.getInput('tactic_lastversioncommit_maxcount');
+        if (lastversioncommitMaxCount) {
+            const maxCountValue = parseInt(lastversioncommitMaxCount, 10);
+            if (!isNaN(maxCountValue)) {
+                result.lastversioncommitMaxCount = maxCountValue;
+            }
+        }
         return result;
     }
     /**
@@ -112,6 +127,13 @@ class ConfigurationService {
         core.info(`Branch cleanup: ${config.branchCleanup}`);
         core.info(`Commit template: ${config.commitMsgTemplate}`);
         core.info(`Dependency commit template: ${config.depCommitMsgTemplate}`);
+        // Log tactic-specific configuration
+        if (config.mergebaseLookbackCommits) {
+            core.info(`MergeBase lookback commits: ${config.mergebaseLookbackCommits}`);
+        }
+        if (config.lastversioncommitMaxCount) {
+            core.info(`LastVersionCommit max count: ${config.lastversioncommitMaxCount}`);
+        }
         core.endGroup();
     }
     /**

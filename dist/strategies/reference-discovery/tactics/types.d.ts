@@ -7,6 +7,7 @@ export interface ReferenceDiscoveryContext {
     activeBranch: string;
     currentBranch: string;
     packageJsonPath?: string;
+    lookbackCommits?: number;
     attemptedStrategies?: string[];
     lastError?: string;
     gitInfo?: {

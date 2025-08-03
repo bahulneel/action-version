@@ -15,6 +15,8 @@ export interface ActionConfiguration {
     readonly strategy: StrategyName;
     readonly activeBranch: string;
     readonly tagPrereleases: boolean;
+    readonly mergebaseLookbackCommits?: number;
+    readonly lastversioncommitMaxCount?: number;
 }
 export interface GitBranches {
     readonly all: readonly string[];
