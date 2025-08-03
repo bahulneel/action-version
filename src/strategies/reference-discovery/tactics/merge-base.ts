@@ -69,8 +69,9 @@ export class MergeBaseTactic implements Tactic<ReferencePointResult, ReferenceDi
       const tacticOptions = TacticConfig.getTacticOptions(this.name, {
         lookbackCommits: 'number',
       })
-      const lookback = tacticOptions.lookbackCommits || context.lookbackCommits || 0
-      let mergeBase: string
+      const lookback =
+        (tacticOptions.lookbackCommits as number) || (context.lookbackCommits as number) || 0
+      let mergeBase: string | null = null
 
       if (lookback > 0) {
         // Try to find merge base with lookback
@@ -90,13 +91,10 @@ export class MergeBaseTactic implements Tactic<ReferencePointResult, ReferenceDi
             break
           }
         }
+      }
 
-        // If no common commit found with lookback, try standard approach
-        if (!mergeBase) {
-          mergeBase = await this.commonCommit(remoteBaseBranch, 'HEAD')
-        }
-      } else {
-        // Use standard merge-base
+      // If no merge base found yet, try standard approach
+      if (!mergeBase) {
         mergeBase = await this.commonCommit(remoteBaseBranch, 'HEAD')
       }
 
