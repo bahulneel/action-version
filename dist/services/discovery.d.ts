@@ -9,7 +9,7 @@ export declare class DiscoveryService {
      */
     determineReferencePoint(baseBranch: string | undefined, activeBranch: string): Promise<ReferencePointResult>;
     /**
-     * Find reference point based on branch comparison.
+     * Find reference point based on branch comparison using tactical system.
      */
     private findBranchBasedReference;
     /**
@@ -23,7 +23,7 @@ export declare class DiscoveryService {
     /**
      * Get package version at a specific commit.
      */
-    private getVersionAtCommit;
+    getVersionAtCommit(commitRef: string): Promise<string | null>;
     /**
      * Find the initial commit of the repository.
      */

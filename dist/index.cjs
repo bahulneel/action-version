@@ -1,6 +1,106 @@
 require('./sourcemap-register.js');/******/ (() => { // webpackBootstrap
 /******/ 	var __webpack_modules__ = ({
 
+/***/ 3175:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.TacticalPlan = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+/**
+ * A tactical plan - coordinates the execution of an ordered sequence of tactics.
+ */
+class TacticalPlan {
+    tactics;
+    description;
+    constructor(tactics, description) {
+        this.tactics = tactics;
+        this.description = description;
+    }
+    /**
+     * Execute this tactical plan.
+     */
+    async execute(context) {
+        if (this.tactics.length === 0) {
+            throw new Error('No tactics in this plan');
+        }
+        core.info(`🎯 Executing tactical plan with ${this.tactics.length} tactics`);
+        if (this.description) {
+            core.debug(`📋 Plan: ${this.description}`);
+        }
+        for (const tactic of this.tactics) {
+            core.debug(`🎯 Executing tactic: ${tactic.name}`);
+            // Assess if this tactic is applicable
+            if (!tactic.assess(context)) {
+                core.debug(`⏭️ ${tactic.name}: Not applicable to this context`);
+                continue;
+            }
+            try {
+                const result = await tactic.attempt(context);
+                // Update context with any new information
+                if (result.context && typeof context === 'object' && context !== null) {
+                    Object.assign(context, result.context);
+                }
+                if (result.applied && result.success && result.result) {
+                    core.info(`✅ ${tactic.name}: ${result.message || 'Success'}`);
+                    return result.result;
+                }
+                else if (result.applied && !result.success) {
+                    core.debug(`❌ ${tactic.name}: ${result.message || 'Failed'}`);
+                }
+                else {
+                    core.debug(`⏭️ ${tactic.name}: ${result.message || 'Not applied'}`);
+                }
+            }
+            catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                core.debug(`❌ ${tactic.name}: Error - ${errorMessage}`);
+                // Continue to next tactic on error
+            }
+        }
+        throw new Error(`All ${this.tactics.length} tactics in plan exhausted`);
+    }
+}
+exports.TacticalPlan = TacticalPlan;
+//# sourceMappingURL=TacticalPlan.js.map
+
+/***/ }),
+
 /***/ 9138:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -711,6 +811,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.DiscoveryService = void 0;
 const core = __importStar(__nccwpck_require__(7484));
 const simple_git_1 = __importDefault(__nccwpck_require__(9065));
+const tactics_js_1 = __nccwpck_require__(976);
 const git = (0, simple_git_1.default)();
 /**
  * Service responsible for discovering git reference points and version information.
@@ -729,78 +830,30 @@ class DiscoveryService {
         }
     }
     /**
-     * Find reference point based on branch comparison.
+     * Find reference point based on branch comparison using tactical system.
      */
     async findBranchBasedReference(baseBranch, activeBranch) {
         core.info(`🔍 Using branch-based reference: ${baseBranch}`);
+        // Get current branch for context
+        const currentBranch = await this.getCurrentBranch();
+        // Build context for tactics
+        const context = {
+            baseBranch,
+            activeBranch,
+            currentBranch,
+            packageJsonPath: 'package.json',
+        };
+        // Execute branch-based tactical plan
+        const tacticalPlan = tactics_js_1.ReferenceDiscoveryTactics.branchBased();
         try {
-            // Check if we're on the base branch (finalization scenario)
-            const currentBranch = await this.getCurrentBranch();
-            const shouldFinalizeVersions = currentBranch === baseBranch;
-            // Find the merge base (last common ancestor) between current branch and base branch
-            const remoteBaseBranch = baseBranch.includes('/') ? baseBranch : `origin/${baseBranch}`;
-            // Ensure we have the remote branch
-            try {
-                await git.fetch('origin', baseBranch.replace('origin/', ''));
-                core.debug(`Fetched ${baseBranch} from origin`);
-            }
-            catch (fetchError) {
-                core.warning(`Failed to fetch ${baseBranch}: ${fetchError}`);
-            }
-            // Debug: Check if branches exist
-            try {
-                const branches = await git.branch(['-a']);
-                core.debug(`Current branch: ${currentBranch}`);
-                core.debug(`Looking for remote branch: ${remoteBaseBranch}`);
-                core.debug(`Available branches: ${branches.all.join(', ')}`);
-            }
-            catch (branchError) {
-                core.debug(`Failed to list branches: ${branchError}`);
-            }
-            const mergeBase = await git.raw(['merge-base', remoteBaseBranch, 'HEAD']);
-            const referenceCommit = mergeBase.trim();
-            if (!referenceCommit) {
-                throw new Error(`Failed to find merge base between ${currentBranch} and ${remoteBaseBranch}`);
-            }
-            // Get version at that commit
-            const referenceVersion = (await this.getVersionAtCommit(referenceCommit)) || '0.0.0';
-            // Check if we should force bump based on branch state
-            const shouldForceBump = !shouldFinalizeVersions && activeBranch !== baseBranch;
-            core.info(`Branch reference: commit=${referenceCommit}, version=${referenceVersion}, finalize=${shouldFinalizeVersions}`);
-            return {
-                referenceCommit,
-                referenceVersion,
-                shouldFinalizeVersions,
-                shouldForceBump,
-            };
+            const result = await tacticalPlan.execute(context);
+            core.info(`🎯 Reference: commit=${result.referenceCommit.substring(0, 8)}, version=${result.referenceVersion}, finalize=${result.shouldFinalizeVersions}`);
+            return result;
         }
         catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            core.warning(`Failed to find branch-based reference: ${errorMessage}`);
-            // In branch mode, don't fall back to tags - use a different strategy
-            core.info(`🔄 Attempting alternative branch-based reference strategy`);
-            try {
-                // Fallback: Use the commit that set the version number in the base branch
-                core.info(`🔄 Fallback: Looking for last version change commit`);
-                // Find the last version change commit in the root package.json
-                const rootPackageJsonPath = 'package.json';
-                const versionCommit = await this.findLastVersionChangeCommit(rootPackageJsonPath);
-                if (versionCommit) {
-                    const referenceVersion = (await this.getVersionAtCommit(versionCommit)) || '0.0.0';
-                    const currentBranch = await this.getCurrentBranch();
-                    core.info(`Using last version change commit as reference: commit=${versionCommit}, version=${referenceVersion}`);
-                    return {
-                        referenceCommit: versionCommit,
-                        referenceVersion,
-                        shouldFinalizeVersions: currentBranch === baseBranch,
-                        shouldForceBump: false, // Don't force bump when using version commit
-                    };
-                }
-            }
-            catch (fallbackError) {
-                core.warning(`Version change commit fallback failed: ${fallbackError}`);
-            }
-            throw new Error(`Both merge-base and version commit strategies failed: ${errorMessage}`);
+            core.error(`❌ Version bump failed: ${errorMessage}`);
+            throw new Error(errorMessage);
         }
     }
     /**
@@ -2433,6 +2486,355 @@ class YarnPackageManagerStrategy extends base_js_1.BasePackageManagerStrategy {
 }
 exports.YarnPackageManagerStrategy = YarnPackageManagerStrategy;
 //# sourceMappingURL=yarn.js.map
+
+/***/ }),
+
+/***/ 976:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ReferenceDiscoveryTactics = void 0;
+const merge_base_js_1 = __nccwpck_require__(3636);
+const last_version_commit_js_1 = __nccwpck_require__(5669);
+const TacticalPlan_js_1 = __nccwpck_require__(3175);
+/**
+ * Reference Discovery Tactics - Tactical plans for different scenarios.
+ *
+ * This module provides pre-configured tactical plans for reference discovery:
+ * - Different workflows use different tactical arrangements
+ * - Tactical execution order is explicit and configurable
+ * - Plans are composable and testable
+ */
+class ReferenceDiscoveryTactics {
+    /**
+     * Branch-based reference discovery plan.
+     *
+     * Order: MergeBase -> LastVersionCommit
+     *
+     * This tries to find the merge base first (most accurate for branch workflows),
+     * but falls back to finding the last version change commit if merge base fails.
+     */
+    static branchBased() {
+        return new TacticalPlan_js_1.TacticalPlan([new merge_base_js_1.MergeBaseTactic(), new last_version_commit_js_1.LastVersionCommitTactic()], 'Branch-based reference discovery: MergeBase -> LastVersionCommit');
+    }
+    /**
+     * Tag-based reference discovery plan.
+     *
+     * For now, this just uses the version commit tactic since tag-based
+     * discovery is still handled in the main DiscoveryService.
+     * In the future, we could create a TagBasedTactic.
+     */
+    static tagBased() {
+        return new TacticalPlan_js_1.TacticalPlan([new last_version_commit_js_1.LastVersionCommitTactic()], 'Tag-based reference discovery: LastVersionCommit only');
+    }
+}
+exports.ReferenceDiscoveryTactics = ReferenceDiscoveryTactics;
+//# sourceMappingURL=tactics.js.map
+
+/***/ }),
+
+/***/ 5669:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.LastVersionCommitTactic = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const simple_git_1 = __nccwpck_require__(9065);
+const git = (0, simple_git_1.simpleGit)();
+/**
+ * LastVersionCommitTactic - Finds the last commit that changed the version field in package.json.
+ *
+ * This tactic is highly reliable because:
+ * - It directly finds the last release point
+ * - Works regardless of branch structure
+ * - Independent of merge-base issues
+ * - Can work across force-pushes and branch recreations
+ */
+class LastVersionCommitTactic {
+    get name() {
+        return 'LastVersionCommit';
+    }
+    assess(_context) {
+        // This tactic is always applicable
+        return true;
+    }
+    async attempt(context) {
+        const packageJsonPath = context.packageJsonPath || 'package.json';
+        try {
+            const versionCommit = await this.findLastVersionChangeCommit(packageJsonPath);
+            if (!versionCommit) {
+                return {
+                    applied: true,
+                    success: false,
+                    message: `No version change commits found in ${packageJsonPath}`,
+                };
+            }
+            const referenceVersion = (await this.getVersionAtCommit(versionCommit)) || '0.0.0';
+            const shouldFinalizeVersions = context.currentBranch === context.baseBranch;
+            return {
+                applied: true,
+                success: true,
+                result: {
+                    referenceCommit: versionCommit,
+                    referenceVersion,
+                    shouldFinalizeVersions,
+                    shouldForceBump: false, // Don't force bump when using version commit
+                },
+                message: `Found last version commit: ${versionCommit.substring(0, 8)} (version: ${referenceVersion})`,
+            };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return {
+                applied: true,
+                success: false,
+                message: `Failed to find version commit: ${errorMessage}`,
+            };
+        }
+    }
+    async findLastVersionChangeCommit(packageJsonPath) {
+        try {
+            const log = await git.log({
+                file: packageJsonPath,
+                maxCount: 50,
+            });
+            // Look for commits that actually changed the version
+            for (const commit of log.all) {
+                try {
+                    const diff = await git.diff([`${commit.hash}~1..${commit.hash}`, '--', packageJsonPath]);
+                    if (diff.includes('"version":')) {
+                        core.debug(`Found version change in commit: ${commit.hash} - ${commit.message}`);
+                        return commit.hash;
+                    }
+                }
+                catch {
+                    // Ignore errors for individual commits (might be initial commit)
+                }
+            }
+            return null;
+        }
+        catch (error) {
+            core.debug(`Failed to find last version change for ${packageJsonPath}: ${error}`);
+            return null;
+        }
+    }
+    async getVersionAtCommit(commit) {
+        try {
+            const packageJsonPath = 'package.json';
+            const fileContent = await git.show([`${commit}:${packageJsonPath}`]);
+            const packageJson = JSON.parse(fileContent);
+            return packageJson.version || null;
+        }
+        catch (error) {
+            core.debug(`Failed to get version at commit ${commit}: ${error}`);
+            return null;
+        }
+    }
+}
+exports.LastVersionCommitTactic = LastVersionCommitTactic;
+//# sourceMappingURL=last-version-commit.js.map
+
+/***/ }),
+
+/***/ 3636:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.MergeBaseTactic = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const simple_git_1 = __nccwpck_require__(9065);
+const git = (0, simple_git_1.simpleGit)();
+/**
+ * MergeBaseTactic - Uses git merge-base to find the common ancestor between current branch and base branch.
+ *
+ * This tactic is context-aware:
+ * - Only executes if baseBranch is provided
+ * - Attempts to fetch remote branches if needed
+ * - Provides detailed context about branch availability
+ * - Gracefully handles cases where merge-base fails
+ */
+class MergeBaseTactic {
+    get name() {
+        return 'MergeBase';
+    }
+    assess(context) {
+        return !!context.baseBranch;
+    }
+    async attempt(context) {
+        if (!context.baseBranch) {
+            return {
+                applied: false,
+                success: false,
+                message: 'No base branch provided',
+            };
+        }
+        try {
+            // Ensure we have git info
+            if (!context.gitInfo) {
+                context.gitInfo = await this.gatherGitInfo(context);
+            }
+            const remoteBaseBranch = context.baseBranch.includes('/')
+                ? context.baseBranch
+                : `origin/${context.baseBranch}`;
+            // Try to fetch the base branch if we haven't seen it
+            if (!context.gitInfo.availableBranches?.includes(remoteBaseBranch)) {
+                try {
+                    await git.fetch('origin', context.baseBranch.replace('origin/', ''));
+                    core.debug(`Fetched ${context.baseBranch} from origin`);
+                    // Update git info after fetch
+                    context.gitInfo = await this.gatherGitInfo(context);
+                }
+                catch (fetchError) {
+                    core.warning(`Failed to fetch ${context.baseBranch}: ${fetchError}`);
+                    return {
+                        applied: true,
+                        success: false,
+                        message: `Failed to fetch base branch: ${fetchError}`,
+                        context: { gitInfo: context.gitInfo || undefined },
+                    };
+                }
+            }
+            // Find merge base between remote base branch and HEAD
+            const mergeBase = await git.raw(['merge-base', remoteBaseBranch, 'HEAD']);
+            const referenceCommit = mergeBase.trim();
+            if (!referenceCommit) {
+                return {
+                    applied: true,
+                    success: false,
+                    message: `No common ancestor found between ${context.currentBranch} and ${remoteBaseBranch}`,
+                    ...(context.gitInfo && { context: { gitInfo: context.gitInfo } }),
+                };
+            }
+            // Get version at the merge base commit
+            const referenceVersion = (await this.getVersionAtCommit(referenceCommit)) || '0.0.0';
+            const shouldFinalizeVersions = context.currentBranch === context.baseBranch;
+            const shouldForceBump = !shouldFinalizeVersions && context.activeBranch !== context.baseBranch;
+            return {
+                applied: true,
+                success: true,
+                result: {
+                    referenceCommit,
+                    referenceVersion,
+                    shouldFinalizeVersions,
+                    shouldForceBump,
+                },
+                message: `Found merge base: ${referenceCommit.substring(0, 8)} (version: ${referenceVersion})`,
+                ...(context.gitInfo && { context: { gitInfo: context.gitInfo } }),
+            };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return {
+                applied: true,
+                success: false,
+                message: `Merge base command failed: ${errorMessage}`,
+                ...(context.gitInfo && { context: { gitInfo: context.gitInfo } }),
+            };
+        }
+    }
+    async gatherGitInfo(_context) {
+        try {
+            const branches = await git.branch(['-a']);
+            return {
+                availableBranches: branches.all,
+                remoteExists: branches.all.some((b) => b.includes('origin/')),
+            };
+        }
+        catch (error) {
+            core.debug(`Failed to gather git info: ${error}`);
+            return {
+                availableBranches: [],
+                remoteExists: false,
+            };
+        }
+    }
+    async getVersionAtCommit(commit) {
+        try {
+            const packageJsonPath = 'package.json';
+            const fileContent = await git.show([`${commit}:${packageJsonPath}`]);
+            const packageJson = JSON.parse(fileContent);
+            return packageJson.version || null;
+        }
+        catch (error) {
+            core.debug(`Failed to get version at commit ${commit}: ${error}`);
+            return null;
+        }
+    }
+}
+exports.MergeBaseTactic = MergeBaseTactic;
+//# sourceMappingURL=merge-base.js.map
 
 /***/ }),
 

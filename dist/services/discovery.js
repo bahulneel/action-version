@@ -39,6 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DiscoveryService = void 0;
 const core = __importStar(require("@actions/core"));
 const simple_git_1 = __importDefault(require("simple-git"));
+const tactics_js_1 = require("../strategies/reference-discovery/tactics.js");
 const git = (0, simple_git_1.default)();
 /**
  * Service responsible for discovering git reference points and version information.
@@ -57,78 +58,30 @@ class DiscoveryService {
         }
     }
     /**
-     * Find reference point based on branch comparison.
+     * Find reference point based on branch comparison using tactical system.
      */
     async findBranchBasedReference(baseBranch, activeBranch) {
         core.info(`🔍 Using branch-based reference: ${baseBranch}`);
+        // Get current branch for context
+        const currentBranch = await this.getCurrentBranch();
+        // Build context for tactics
+        const context = {
+            baseBranch,
+            activeBranch,
+            currentBranch,
+            packageJsonPath: 'package.json',
+        };
+        // Execute branch-based tactical plan
+        const tacticalPlan = tactics_js_1.ReferenceDiscoveryTactics.branchBased();
         try {
-            // Check if we're on the base branch (finalization scenario)
-            const currentBranch = await this.getCurrentBranch();
-            const shouldFinalizeVersions = currentBranch === baseBranch;
-            // Find the merge base (last common ancestor) between current branch and base branch
-            const remoteBaseBranch = baseBranch.includes('/') ? baseBranch : `origin/${baseBranch}`;
-            // Ensure we have the remote branch
-            try {
-                await git.fetch('origin', baseBranch.replace('origin/', ''));
-                core.debug(`Fetched ${baseBranch} from origin`);
-            }
-            catch (fetchError) {
-                core.warning(`Failed to fetch ${baseBranch}: ${fetchError}`);
-            }
-            // Debug: Check if branches exist
-            try {
-                const branches = await git.branch(['-a']);
-                core.debug(`Current branch: ${currentBranch}`);
-                core.debug(`Looking for remote branch: ${remoteBaseBranch}`);
-                core.debug(`Available branches: ${branches.all.join(', ')}`);
-            }
-            catch (branchError) {
-                core.debug(`Failed to list branches: ${branchError}`);
-            }
-            const mergeBase = await git.raw(['merge-base', remoteBaseBranch, 'HEAD']);
-            const referenceCommit = mergeBase.trim();
-            if (!referenceCommit) {
-                throw new Error(`Failed to find merge base between ${currentBranch} and ${remoteBaseBranch}`);
-            }
-            // Get version at that commit
-            const referenceVersion = (await this.getVersionAtCommit(referenceCommit)) || '0.0.0';
-            // Check if we should force bump based on branch state
-            const shouldForceBump = !shouldFinalizeVersions && activeBranch !== baseBranch;
-            core.info(`Branch reference: commit=${referenceCommit}, version=${referenceVersion}, finalize=${shouldFinalizeVersions}`);
-            return {
-                referenceCommit,
-                referenceVersion,
-                shouldFinalizeVersions,
-                shouldForceBump,
-            };
+            const result = await tacticalPlan.execute(context);
+            core.info(`🎯 Reference: commit=${result.referenceCommit.substring(0, 8)}, version=${result.referenceVersion}, finalize=${result.shouldFinalizeVersions}`);
+            return result;
         }
         catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            core.warning(`Failed to find branch-based reference: ${errorMessage}`);
-            // In branch mode, don't fall back to tags - use a different strategy
-            core.info(`🔄 Attempting alternative branch-based reference strategy`);
-            try {
-                // Fallback: Use the commit that set the version number in the base branch
-                core.info(`🔄 Fallback: Looking for last version change commit`);
-                // Find the last version change commit in the root package.json
-                const rootPackageJsonPath = 'package.json';
-                const versionCommit = await this.findLastVersionChangeCommit(rootPackageJsonPath);
-                if (versionCommit) {
-                    const referenceVersion = (await this.getVersionAtCommit(versionCommit)) || '0.0.0';
-                    const currentBranch = await this.getCurrentBranch();
-                    core.info(`Using last version change commit as reference: commit=${versionCommit}, version=${referenceVersion}`);
-                    return {
-                        referenceCommit: versionCommit,
-                        referenceVersion,
-                        shouldFinalizeVersions: currentBranch === baseBranch,
-                        shouldForceBump: false, // Don't force bump when using version commit
-                    };
-                }
-            }
-            catch (fallbackError) {
-                core.warning(`Version change commit fallback failed: ${fallbackError}`);
-            }
-            throw new Error(`Both merge-base and version commit strategies failed: ${errorMessage}`);
+            core.error(`❌ Version bump failed: ${errorMessage}`);
+            throw new Error(errorMessage);
         }
     }
     /**
