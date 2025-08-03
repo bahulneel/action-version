@@ -4023,12 +4023,26 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
     // Fetch all branches with full history to ensure merge-base works properly
     try {
         core.debug(`[git] Fetching all branches with full history`);
-        await git.fetch(['--all', '--unshallow', '--prune', '--prune-tags']);
-        core.debug(`[git] Successfully fetched all branches with full history`);
+        await git.fetch(['--all', '--prune', '--prune-tags']);
+        core.debug(`[git] Successfully fetched all branches`);
     }
     catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         core.warning(`[git] Failed to fetch all branches: ${errorMessage}`);
+    }
+    // Try to unshallow if this is a shallow repository
+    try {
+        await git.fetch(['--unshallow']);
+        core.debug(`[git] Successfully unshallowed repository`);
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('does not make sense')) {
+            core.debug(`[git] Repository is already complete (not shallow)`);
+        }
+        else {
+            core.debug(`[git] Failed to unshallow: ${errorMessage}`);
+        }
     }
     const currentBranch = process.env?.GITHUB_HEAD_REF || process.env?.GITHUB_REF_NAME || 'main';
     if (shouldCreateBranch) {
