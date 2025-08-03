@@ -69,6 +69,21 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
         : undefined;
     try {
         if (newBranch) {
+            // Check if the branch already exists and delete it (this is rare but can happen)
+            try {
+                const branches = await git.branch();
+                if (branches.all.includes(newBranch)) {
+                    core.info(`[git] Branch ${newBranch} already exists, deleting it first`);
+                    await git.deleteLocalBranch(newBranch, true);
+                }
+            }
+            catch (error) {
+                // Not finding the branch is expected, only log if it's a different error
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                if (!errorMessage.includes('not found') && !errorMessage.includes('does not exist')) {
+                    core.debug(`[git] Error checking for existing branch ${newBranch}: ${errorMessage}`);
+                }
+            }
             core.info(`[git] Checking out ${newBranch} from ${currentBranch}`);
             await git.checkoutBranch(newBranch, currentBranch);
             core.debug(`[git] Successfully checked out ${newBranch}`);
