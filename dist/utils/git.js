@@ -53,10 +53,10 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
     // Configure git user
     await git.addConfig('user.name', 'github-actions[bot]');
     await git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com');
-    // Fetch latest changes
+    // Fetch latest changes with aggressive pruning
     try {
-        core.debug(`[git] Fetching latest changes from origin`);
-        await git.fetch(['--prune', 'origin']);
+        core.debug(`[git] Fetching latest changes from origin with pruning`);
+        await git.fetch(['--prune', '--prune-tags', 'origin']);
         core.debug(`[git] Successfully fetched from origin`);
     }
     catch (error) {
@@ -64,42 +64,33 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
         core.warning(`[git] Failed to fetch from origin: ${errorMessage}`);
     }
     const currentBranch = process.env?.GITHUB_HEAD_REF || process.env?.GITHUB_REF_NAME || 'main';
-    const newBranch = shouldCreateBranch
-        ? interpolateBranchTemplate(branchTemplate, { version: currentBranch })
-        : undefined;
-    try {
-        if (newBranch) {
-            // Check if the branch already exists and delete it (this is rare but can happen)
-            try {
-                const branches = await git.branch();
-                if (branches.all.includes(newBranch)) {
-                    core.info(`[git] Branch ${newBranch} already exists, deleting it first`);
-                    await git.deleteLocalBranch(newBranch, true);
-                }
-            }
-            catch (error) {
-                // Not finding the branch is expected, only log if it's a different error
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                if (!errorMessage.includes('not found') && !errorMessage.includes('does not exist')) {
-                    core.debug(`[git] Error checking for existing branch ${newBranch}: ${errorMessage}`);
-                }
-            }
-            core.info(`[git] Checking out ${newBranch} from ${currentBranch}`);
-            await git.checkoutBranch(newBranch, currentBranch);
-            core.debug(`[git] Successfully checked out ${newBranch}`);
+    if (shouldCreateBranch) {
+        // Create a unique ref instead of a branch to avoid cleanup issues
+        const timestamp = Date.now();
+        const refName = `refs/heads/temp-${timestamp}`;
+        const displayName = interpolateBranchTemplate(branchTemplate, { version: currentBranch });
+        core.info(`[git] Creating temporary ref ${refName} from ${currentBranch}`);
+        try {
+            // Create the ref directly without checking out
+            await git.raw(['update-ref', refName, currentBranch]);
+            core.debug(`[git] Successfully created ref ${refName}`);
+            // Checkout the ref
+            await git.checkout(refName);
+            core.debug(`[git] Successfully checked out ${refName}`);
+            return { currentBranch, newBranch: displayName, tempRef: refName };
         }
-        else {
-            core.info(`[git] Checking out ${currentBranch}`);
-            await git.checkout(currentBranch);
-            core.debug(`[git] Successfully checked out ${currentBranch}`);
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            core.error(`[git] Failed to create ref: ${errorMessage}`);
+            throw new Error(`Failed to create ref: ${errorMessage}`);
         }
     }
-    catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        core.error(`[git] Failed to checkout branch: ${errorMessage}`);
-        throw new Error(`Failed to checkout branch: ${errorMessage}`);
+    else {
+        core.info(`[git] Checking out ${currentBranch}`);
+        await git.checkout(currentBranch);
+        core.debug(`[git] Successfully checked out ${currentBranch}`);
+        return { currentBranch, newBranch: undefined };
     }
-    return { currentBranch, newBranch };
 }
 /**
  * Get commits affecting a specific directory since a reference point.

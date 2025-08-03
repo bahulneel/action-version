@@ -6,6 +6,7 @@ import 'source-map-support/register';
 declare class VersionBumpApplication {
     private exitCode;
     private outputBranch;
+    private tempRef;
     private hasBumped;
     /**
      * Run the complete version bump process.

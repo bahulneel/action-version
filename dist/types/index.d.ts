@@ -121,6 +121,7 @@ export interface BuildDepGraphResult {
 export interface GitSetupResult {
     readonly currentBranch: string;
     readonly newBranch: string | undefined;
+    readonly tempRef?: string;
 }
 export interface ValidationError extends Error {
     readonly field: string;
