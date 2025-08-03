@@ -553,7 +553,7 @@ class VersionBumpApplication {
                 const simpleGit = (await Promise.resolve().then(() => __importStar(__nccwpck_require__(9065)))).default;
                 const git = simpleGit();
                 core.info(`[git] Cleaning up temporary ref ${this.tempRef}`);
-                await git.raw(['update-ref', '-d', this.tempRef]);
+                await git.raw('update-ref', '-d', this.tempRef);
                 core.debug(`[git] Successfully deleted temporary ref ${this.tempRef}`);
             }
             catch (error) {
@@ -2918,7 +2918,7 @@ class LastVersionCommitTactic {
             const maxCount = tacticOptions.maxCount || 1;
             const gitCommand = ['log', '-L', `/version/,+1:${packageJsonPath}`, `--max-count=${maxCount}`];
             core.debug(`Executing git command: ${gitCommand.join(' ')}`);
-            const logOutput = await git.raw(gitCommand);
+            const logOutput = await git.raw(...gitCommand);
             if (logOutput.trim()) {
                 core.debug(`Git log output (first 200 chars): ${logOutput.substring(0, 200)}`);
                 // Parse the commit hash from the diff output
@@ -3111,7 +3111,7 @@ class MergeBaseTactic {
     async commonCommit(base, target) {
         try {
             core.debug(`Running: git merge-base ${base} ${target}`);
-            const mergeBaseOutput = await git.raw(['merge-base', base, target]);
+            const mergeBaseOutput = await git.raw('merge-base', base, target);
             const mergeBase = mergeBaseOutput.trim();
             core.debug(`Merge base output: "${mergeBase}"`);
             return mergeBase || null;
@@ -4039,7 +4039,7 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
         core.info(`[git] Creating temporary ref ${refName} from ${currentBranch}`);
         try {
             // Create the ref directly without checking out
-            await git.raw(['update-ref', refName, currentBranch]);
+            await git.raw('update-ref', refName, currentBranch);
             core.debug(`[git] Successfully created ref ${refName}`);
             // Checkout the ref
             await git.checkout(refName);

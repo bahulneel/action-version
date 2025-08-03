@@ -72,7 +72,7 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
         core.info(`[git] Creating temporary ref ${refName} from ${currentBranch}`);
         try {
             // Create the ref directly without checking out
-            await git.raw(['update-ref', refName, currentBranch]);
+            await git.raw('update-ref', refName, currentBranch);
             core.debug(`[git] Successfully created ref ${refName}`);
             // Checkout the ref
             await git.checkout(refName);

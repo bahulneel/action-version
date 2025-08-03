@@ -99,7 +99,7 @@ class LastVersionCommitTactic {
             const maxCount = tacticOptions.maxCount || 1;
             const gitCommand = ['log', '-L', `/version/,+1:${packageJsonPath}`, `--max-count=${maxCount}`];
             core.debug(`Executing git command: ${gitCommand.join(' ')}`);
-            const logOutput = await git.raw(gitCommand);
+            const logOutput = await git.raw(...gitCommand);
             if (logOutput.trim()) {
                 core.debug(`Git log output (first 200 chars): ${logOutput.substring(0, 200)}`);
                 // Parse the commit hash from the diff output
