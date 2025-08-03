@@ -1,5 +1,7 @@
 import { MergeBaseTactic } from './tactics/merge-base.js'
 import { LastVersionCommitTactic } from './tactics/last-version-commit.js'
+import { DiffBasedVersionCommitTactic } from './tactics/diff-based-version-commit.js'
+import { ExecutePlanTactic } from './tactics/execute-plan.js'
 import { TacticalPlan } from '../../TacticalPlan.js'
 import type { ReferencePointResult } from '../../types/index.js'
 import type { ReferenceDiscoveryContext } from './tactics/types.js'
@@ -40,5 +42,33 @@ export class ReferenceDiscoveryTactics {
       [new LastVersionCommitTactic()],
       'Tag-based reference discovery: LastVersionCommit only'
     )
+  }
+
+  /**
+   * Composed version commit discovery plan.
+   *
+   * Uses both the efficient -L approach and the thorough diff-based approach.
+   * This provides the best of both worlds: speed and reliability.
+   */
+  public static composedVersionCommit(): TacticalPlan<
+    ReferencePointResult,
+    ReferenceDiscoveryContext
+  > {
+    return new TacticalPlan(
+      [new LastVersionCommitTactic(), new DiffBasedVersionCommitTactic()],
+      'Composed version commit discovery: LastVersionCommit -> DiffBasedVersionCommit'
+    )
+  }
+
+  /**
+   * Create a plan that can be executed as a tactic.
+   *
+   * This enables composition where plans can be nested and reused.
+   */
+  public static createExecutablePlan(
+    plan: TacticalPlan<ReferencePointResult, ReferenceDiscoveryContext>,
+    name?: string
+  ): ExecutePlanTactic {
+    return new ExecutePlanTactic(plan, name)
   }
 }
