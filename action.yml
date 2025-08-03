@@ -5,19 +5,19 @@ inputs:
   commit_template:
     description: Commit message template for version bumps.
     required: false
-    default: 'chore(release): bump ${package} to ${version} (${bumpType})'
+    default: "chore(release): bump ${package} to ${version} (${bumpType})"
   dependency_commit_template:
     description: Commit message template for dependency updates.
     required: false
-    default: 'chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)'
+    default: "chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)"
   create_branch:
     description: Create a separate branch for version updates.
     required: false
-    default: 'false'
+    default: "false"
   branch_template:
     description: Template for the branch name when creating branches.
     required: false
-    default: 'release/${version}'
+    default: "release/${version}"
   branch_cleanup:
     description: "Strategy for cleaning up versioned branches: 'keep' (keep all), 'prune' (keep latest only), or 'semantic' (keep same bump type only)."
     required: false
@@ -37,7 +37,16 @@ inputs:
   tag_prereleases:
     description: Create git tags for prerelease versions.
     required: false
-    default: 'false'
+    default: "false"
+  # Tactic-specific configuration
+  tactic_mergebase_lookbackcommits:
+    description: Number of commits to look back when finding merge base (MergeBase tactic). Must be a positive integer. Default 10 to handle merge commits.
+    required: false
+    default: "10"
+  tactic_lastversioncommit_maxcount:
+    description: Number of version commits to consider when finding last version change (LastVersionCommit tactic). Must be a positive integer.
+    required: false
+    default: "1"
 outputs:
   branch:
     description: The branch that was created or updated.

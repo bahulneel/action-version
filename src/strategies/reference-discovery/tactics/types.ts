@@ -7,6 +7,8 @@ export interface ReferenceDiscoveryContext {
   activeBranch: string
   currentBranch: string
   packageJsonPath?: string
+  // Configuration options for tactics
+  lookbackCommits?: number
   // Shared state that tactics can use to communicate
   attemptedStrategies?: string[]
   lastError?: string

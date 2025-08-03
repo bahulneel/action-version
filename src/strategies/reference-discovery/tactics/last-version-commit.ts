@@ -3,6 +3,7 @@ import { simpleGit } from 'simple-git'
 import type { Tactic, TacticResult } from '../../../types/tactics.js'
 import type { ReferencePointResult } from '../../../types/index.js'
 import type { ReferenceDiscoveryContext } from './types.js'
+import { TacticConfig } from '../../../utils/tactic-config.js'
 
 const git = simpleGit()
 
@@ -74,11 +75,16 @@ export class LastVersionCommitTactic
     try {
       // Use git log -L to directly track version field changes
       // This is much more efficient than scanning all commits
+      const tacticOptions = TacticConfig.getTacticOptions(this.name, {
+        maxCount: 'number',
+      })
+      const maxCount = tacticOptions.maxCount || 1
+
       const logOutput = await git.raw([
         'log',
         '-L',
         `/"version":/,+1:${packageJsonPath}`,
-        '--max-count=1',
+        `--max-count=${maxCount}`,
       ])
 
       if (!logOutput.trim()) {

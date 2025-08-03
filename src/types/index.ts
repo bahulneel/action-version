@@ -18,6 +18,9 @@ export interface ActionConfiguration {
   readonly strategy: StrategyName
   readonly activeBranch: string
   readonly tagPrereleases: boolean
+  // Tactic-specific configuration
+  readonly mergebaseLookbackCommits?: number
+  readonly lastversioncommitMaxCount?: number
 }
 
 // Git operation interfaces
