@@ -87,6 +87,14 @@ class MergeBaseTactic {
                     };
                 }
             }
+            // Ensure we have full history for merge-base to work properly
+            try {
+                await git.fetch('--unshallow');
+                core.debug('Fetched full history to ensure merge-base works');
+            }
+            catch (fetchError) {
+                core.debug('Repository is not shallow or already has full history');
+            }
             // Find merge base between remote base branch and HEAD
             const mergeBase = await this.commonCommit(remoteBaseBranch, 'HEAD');
             if (!mergeBase) {
