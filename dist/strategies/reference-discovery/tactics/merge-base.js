@@ -97,13 +97,18 @@ class MergeBaseTactic {
             if (lookback > 0) {
                 // Try to find merge base with lookback
                 const baseHashes = await this.getBaseHashes(lookback);
+                core.debug(`Checking ${baseHashes.length} recent commits for merge base`);
                 // Iterate through recent commits to find common ancestor
                 for (const commitHash of baseHashes) {
+                    core.debug(`Checking commit ${commitHash.substring(0, 8)} for merge base`);
                     const commonCommit = await this.commonCommit(remoteBaseBranch, commitHash);
                     if (commonCommit && commonCommit !== commitHash) {
                         core.debug(`Found merge base ${commonCommit.substring(0, 8)} using lookback commit ${commitHash.substring(0, 8)}`);
                         mergeBase = commonCommit;
                         break;
+                    }
+                    else {
+                        core.debug(`No common ancestor found for commit ${commitHash.substring(0, 8)}`);
                     }
                 }
             }

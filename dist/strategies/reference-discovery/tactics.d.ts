@@ -1,3 +1,4 @@
+import { ExecutePlanTactic } from './tactics/execute-plan.js';
 import { TacticalPlan } from '../../TacticalPlan.js';
 import type { ReferencePointResult } from '../../types/index.js';
 import type { ReferenceDiscoveryContext } from './tactics/types.js';
@@ -27,5 +28,18 @@ export declare class ReferenceDiscoveryTactics {
      * In the future, we could create a TagBasedTactic.
      */
     static tagBased(): TacticalPlan<ReferencePointResult, ReferenceDiscoveryContext>;
+    /**
+     * Composed version commit discovery plan.
+     *
+     * Uses both the efficient -L approach and the thorough diff-based approach.
+     * This provides the best of both worlds: speed and reliability.
+     */
+    static composedVersionCommit(): TacticalPlan<ReferencePointResult, ReferenceDiscoveryContext>;
+    /**
+     * Create a plan that can be executed as a tactic.
+     *
+     * This enables composition where plans can be nested and reused.
+     */
+    static createExecutablePlan(plan: TacticalPlan<ReferencePointResult, ReferenceDiscoveryContext>, name?: string): ExecutePlanTactic;
 }
 //# sourceMappingURL=tactics.d.ts.map

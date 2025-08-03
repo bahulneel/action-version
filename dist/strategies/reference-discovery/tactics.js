@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ReferenceDiscoveryTactics = void 0;
 const merge_base_js_1 = require("./tactics/merge-base.js");
 const last_version_commit_js_1 = require("./tactics/last-version-commit.js");
+const diff_based_version_commit_js_1 = require("./tactics/diff-based-version-commit.js");
+const execute_plan_js_1 = require("./tactics/execute-plan.js");
 const TacticalPlan_js_1 = require("../../TacticalPlan.js");
 /**
  * Reference Discovery Tactics - Tactical plans for different scenarios.
@@ -33,6 +35,23 @@ class ReferenceDiscoveryTactics {
      */
     static tagBased() {
         return new TacticalPlan_js_1.TacticalPlan([new last_version_commit_js_1.LastVersionCommitTactic()], 'Tag-based reference discovery: LastVersionCommit only');
+    }
+    /**
+     * Composed version commit discovery plan.
+     *
+     * Uses both the efficient -L approach and the thorough diff-based approach.
+     * This provides the best of both worlds: speed and reliability.
+     */
+    static composedVersionCommit() {
+        return new TacticalPlan_js_1.TacticalPlan([new last_version_commit_js_1.LastVersionCommitTactic(), new diff_based_version_commit_js_1.DiffBasedVersionCommitTactic()], 'Composed version commit discovery: LastVersionCommit -> DiffBasedVersionCommit');
+    }
+    /**
+     * Create a plan that can be executed as a tactic.
+     *
+     * This enables composition where plans can be nested and reused.
+     */
+    static createExecutablePlan(plan, name) {
+        return new execute_plan_js_1.ExecutePlanTactic(plan, name);
     }
 }
 exports.ReferenceDiscoveryTactics = ReferenceDiscoveryTactics;

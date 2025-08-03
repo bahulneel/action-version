@@ -97,57 +97,36 @@ class LastVersionCommitTactic {
                 maxCount: 'number',
             });
             const maxCount = tacticOptions.maxCount || 1;
-            const logOutput = await git.raw([
+            const gitCommand = [
                 'log',
                 '-L',
                 `/"version":/,+1:${packageJsonPath}`,
                 `--max-count=${maxCount}`,
-            ]);
-            if (!logOutput.trim()) {
-                core.debug(`No version changes found in ${packageJsonPath}`);
-                return null;
+            ];
+            core.debug(`Executing git command: ${gitCommand.join(' ')}`);
+            const logOutput = await git.raw(gitCommand);
+            if (logOutput.trim()) {
+                core.debug(`Git log output (first 200 chars): ${logOutput.substring(0, 200)}`);
+                // Parse the commit hash from the diff output
+                // Format: <commit-hash>\ndiff --git a/package.json b/package.json
+                const lines = logOutput.trim().split('\n');
+                const firstLine = lines[0];
+                core.debug(`First line: "${firstLine}"`);
+                // Extract commit hash from first line (should be 40 chars)
+                if (firstLine && firstLine.match(/^[a-f0-9]{40}$/)) {
+                    const commitHash = firstLine;
+                    core.debug(`Found version change in commit: ${commitHash.substring(0, 8)}`);
+                    return commitHash;
+                }
+                core.debug(`First line does not match commit hash pattern`);
             }
-            // Parse the commit hash from the diff output
-            // Format: <commit-hash>\ndiff --git a/package.json b/package.json
-            const lines = logOutput.trim().split('\n');
-            const firstLine = lines[0];
-            // Extract commit hash from first line (should be 40 chars)
-            if (firstLine && firstLine.match(/^[a-f0-9]{40}$/)) {
-                const commitHash = firstLine;
-                core.debug(`Found version change in commit: ${commitHash.substring(0, 8)}`);
-                return commitHash;
+            else {
+                core.debug(`No version changes found in ${packageJsonPath} using -L`);
             }
             return null;
         }
         catch (error) {
-            core.debug(`Failed to find last version change for ${packageJsonPath} using -L: ${error}`);
-            // Fallback to the old method if -L fails for any reason
-            return this.findLastVersionChangeCommitFallback(packageJsonPath);
-        }
-    }
-    async findLastVersionChangeCommitFallback(packageJsonPath) {
-        try {
-            const log = await git.log({
-                file: packageJsonPath,
-                maxCount: 50,
-            });
-            // Look for commits that actually changed the version
-            for (const commit of log.all) {
-                try {
-                    const diff = await git.diff([`${commit.hash}~1..${commit.hash}`, '--', packageJsonPath]);
-                    if (diff.includes('"version":')) {
-                        core.debug(`Found version change in commit: ${commit.hash} - ${commit.message}`);
-                        return commit.hash;
-                    }
-                }
-                catch {
-                    // Ignore errors for individual commits (might be initial commit)
-                }
-            }
-            return null;
-        }
-        catch (error) {
-            core.debug(`Failed to find last version change for ${packageJsonPath}: ${error}`);
+            core.debug(`-L approach failed: ${error}`);
             return null;
         }
     }
