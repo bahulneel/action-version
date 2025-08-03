@@ -3055,14 +3055,6 @@ class MergeBaseTactic {
                     };
                 }
             }
-            // Ensure we have full history for merge-base to work properly
-            try {
-                await git.fetch('--unshallow');
-                core.debug('Fetched full history to ensure merge-base works');
-            }
-            catch (fetchError) {
-                core.debug('Repository is not shallow or already has full history');
-            }
             // Find merge base between remote base branch and HEAD
             const mergeBase = await this.commonCommit(remoteBaseBranch, 'HEAD');
             if (!mergeBase) {
@@ -4028,15 +4020,15 @@ async function setupGit(shouldCreateBranch, branchTemplate) {
     // Configure git user
     await git.addConfig('user.name', 'github-actions[bot]');
     await git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com');
-    // Fetch latest changes with aggressive pruning
+    // Fetch all branches with full history to ensure merge-base works properly
     try {
-        core.debug(`[git] Fetching latest changes from origin with pruning`);
-        await git.fetch(['--prune', '--prune-tags', 'origin']);
-        core.debug(`[git] Successfully fetched from origin`);
+        core.debug(`[git] Fetching all branches with full history`);
+        await git.fetch(['--all', '--unshallow', '--prune', '--prune-tags']);
+        core.debug(`[git] Successfully fetched all branches with full history`);
     }
     catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        core.warning(`[git] Failed to fetch from origin: ${errorMessage}`);
+        core.warning(`[git] Failed to fetch all branches: ${errorMessage}`);
     }
     const currentBranch = process.env?.GITHUB_HEAD_REF || process.env?.GITHUB_REF_NAME || 'main';
     if (shouldCreateBranch) {
