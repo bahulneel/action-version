@@ -15,7 +15,6 @@ export declare class MergeBaseTactic implements Tactic<ReferencePointResult, Ref
     assess(context: ReferenceDiscoveryContext): boolean;
     attempt(context: ReferenceDiscoveryContext): Promise<TacticResult<ReferencePointResult, ReferenceDiscoveryContext>>;
     private gatherGitInfo;
-    private getBaseHashes;
     private commonCommit;
     private getVersionAtCommit;
 }
