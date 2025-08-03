@@ -2520,6 +2520,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.ReferenceDiscoveryTactics = void 0;
 const merge_base_js_1 = __nccwpck_require__(3636);
 const last_version_commit_js_1 = __nccwpck_require__(5669);
+const diff_based_version_commit_js_1 = __nccwpck_require__(1170);
+const execute_plan_js_1 = __nccwpck_require__(2627);
 const TacticalPlan_js_1 = __nccwpck_require__(3175);
 /**
  * Reference Discovery Tactics - Tactical plans for different scenarios.
@@ -2551,9 +2553,241 @@ class ReferenceDiscoveryTactics {
     static tagBased() {
         return new TacticalPlan_js_1.TacticalPlan([new last_version_commit_js_1.LastVersionCommitTactic()], 'Tag-based reference discovery: LastVersionCommit only');
     }
+    /**
+     * Composed version commit discovery plan.
+     *
+     * Uses both the efficient -L approach and the thorough diff-based approach.
+     * This provides the best of both worlds: speed and reliability.
+     */
+    static composedVersionCommit() {
+        return new TacticalPlan_js_1.TacticalPlan([new last_version_commit_js_1.LastVersionCommitTactic(), new diff_based_version_commit_js_1.DiffBasedVersionCommitTactic()], 'Composed version commit discovery: LastVersionCommit -> DiffBasedVersionCommit');
+    }
+    /**
+     * Create a plan that can be executed as a tactic.
+     *
+     * This enables composition where plans can be nested and reused.
+     */
+    static createExecutablePlan(plan, name) {
+        return new execute_plan_js_1.ExecutePlanTactic(plan, name);
+    }
 }
 exports.ReferenceDiscoveryTactics = ReferenceDiscoveryTactics;
 //# sourceMappingURL=tactics.js.map
+
+/***/ }),
+
+/***/ 1170:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DiffBasedVersionCommitTactic = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+const simple_git_1 = __nccwpck_require__(9065);
+const git = (0, simple_git_1.simpleGit)();
+/**
+ * DiffBasedVersionCommitTactic - Traditional approach to finding version changes.
+ *
+ * This tactic uses git log to find commits that touched package.json,
+ * then checks each commit's diff to see if it changed the version field.
+ * It's more thorough but slower than the -L approach.
+ */
+class DiffBasedVersionCommitTactic {
+    get name() {
+        return 'DiffBasedVersionCommit';
+    }
+    assess(_context) {
+        // This tactic is always applicable as a fallback
+        return true;
+    }
+    async attempt(context) {
+        const packageJsonPath = context.packageJsonPath || 'package.json';
+        try {
+            core.debug(`Using fallback method to find version changes in ${packageJsonPath}`);
+            const log = await git.log({
+                file: packageJsonPath,
+                maxCount: 50,
+            });
+            core.debug(`Found ${log.all.length} commits that touched ${packageJsonPath}`);
+            // Look for commits that actually changed the version
+            for (const commit of log.all) {
+                try {
+                    core.debug(`Checking commit ${commit.hash.substring(0, 8)} for version changes`);
+                    const diff = await git.diff([`${commit.hash}~1..${commit.hash}`, '--', packageJsonPath]);
+                    if (diff.includes('"version":')) {
+                        core.debug(`Found version change in commit: ${commit.hash} - ${commit.message}`);
+                        const referenceVersion = (await this.getVersionAtCommit(commit.hash)) || '0.0.0';
+                        const shouldFinalizeVersions = context.currentBranch === context.baseBranch;
+                        return {
+                            applied: true,
+                            success: true,
+                            result: {
+                                referenceCommit: commit.hash,
+                                referenceVersion,
+                                shouldFinalizeVersions,
+                                shouldForceBump: false, // Don't force bump when using version commit
+                            },
+                            message: `Found last version commit: ${commit.hash.substring(0, 8)} (version: ${referenceVersion})`,
+                        };
+                    }
+                }
+                catch (error) {
+                    core.debug(`Error checking commit ${commit.hash.substring(0, 8)}: ${error}`);
+                    // Ignore errors for individual commits (might be initial commit)
+                }
+            }
+            core.debug(`No version changes found in any commits`);
+            return {
+                applied: true,
+                success: false,
+                message: `No version change commits found in ${packageJsonPath}`,
+            };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return {
+                applied: true,
+                success: false,
+                message: `Failed to find version commit: ${errorMessage}`,
+            };
+        }
+    }
+    async getVersionAtCommit(commit) {
+        try {
+            const packageJsonPath = 'package.json';
+            const fileContent = await git.show([`${commit}:${packageJsonPath}`]);
+            const packageJson = JSON.parse(fileContent);
+            return packageJson.version || null;
+        }
+        catch (error) {
+            core.debug(`Failed to get version at commit ${commit}: ${error}`);
+            return null;
+        }
+    }
+}
+exports.DiffBasedVersionCommitTactic = DiffBasedVersionCommitTactic;
+//# sourceMappingURL=diff-based-version-commit.js.map
+
+/***/ }),
+
+/***/ 2627:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ExecutePlanTactic = void 0;
+const core = __importStar(__nccwpck_require__(7484));
+/**
+ * ExecutePlanTactic - Executes a tactical plan as a single tactic.
+ *
+ * This enables composition where a plan (sequence of tactics) can be treated
+ * as a tactic itself, allowing for nested and composable tactical strategies.
+ */
+class ExecutePlanTactic {
+    plan;
+    tacticName;
+    constructor(plan, name) {
+        this.plan = plan;
+        this.tacticName = name || `ExecutePlan(${plan.description})`;
+    }
+    get name() {
+        return this.tacticName;
+    }
+    assess(_context) {
+        // A plan is always applicable - it will handle its own tactic assessment
+        return true;
+    }
+    async attempt(context) {
+        try {
+            core.debug(`🎯 Executing plan as tactic: ${this.plan.description}`);
+            const result = await this.plan.execute(context);
+            return {
+                applied: true,
+                success: true,
+                result: result,
+                message: `Plan executed successfully`,
+            };
+        }
+        catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return {
+                applied: true,
+                success: false,
+                message: `Plan execution error: ${errorMessage}`,
+            };
+        }
+    }
+}
+exports.ExecutePlanTactic = ExecutePlanTactic;
+//# sourceMappingURL=execute-plan.js.map
 
 /***/ }),
 
@@ -2660,57 +2894,36 @@ class LastVersionCommitTactic {
                 maxCount: 'number',
             });
             const maxCount = tacticOptions.maxCount || 1;
-            const logOutput = await git.raw([
+            const gitCommand = [
                 'log',
                 '-L',
                 `/"version":/,+1:${packageJsonPath}`,
                 `--max-count=${maxCount}`,
-            ]);
-            if (!logOutput.trim()) {
-                core.debug(`No version changes found in ${packageJsonPath}`);
-                return null;
+            ];
+            core.debug(`Executing git command: ${gitCommand.join(' ')}`);
+            const logOutput = await git.raw(gitCommand);
+            if (logOutput.trim()) {
+                core.debug(`Git log output (first 200 chars): ${logOutput.substring(0, 200)}`);
+                // Parse the commit hash from the diff output
+                // Format: <commit-hash>\ndiff --git a/package.json b/package.json
+                const lines = logOutput.trim().split('\n');
+                const firstLine = lines[0];
+                core.debug(`First line: "${firstLine}"`);
+                // Extract commit hash from first line (should be 40 chars)
+                if (firstLine && firstLine.match(/^[a-f0-9]{40}$/)) {
+                    const commitHash = firstLine;
+                    core.debug(`Found version change in commit: ${commitHash.substring(0, 8)}`);
+                    return commitHash;
+                }
+                core.debug(`First line does not match commit hash pattern`);
             }
-            // Parse the commit hash from the diff output
-            // Format: <commit-hash>\ndiff --git a/package.json b/package.json
-            const lines = logOutput.trim().split('\n');
-            const firstLine = lines[0];
-            // Extract commit hash from first line (should be 40 chars)
-            if (firstLine && firstLine.match(/^[a-f0-9]{40}$/)) {
-                const commitHash = firstLine;
-                core.debug(`Found version change in commit: ${commitHash.substring(0, 8)}`);
-                return commitHash;
+            else {
+                core.debug(`No version changes found in ${packageJsonPath} using -L`);
             }
             return null;
         }
         catch (error) {
-            core.debug(`Failed to find last version change for ${packageJsonPath} using -L: ${error}`);
-            // Fallback to the old method if -L fails for any reason
-            return this.findLastVersionChangeCommitFallback(packageJsonPath);
-        }
-    }
-    async findLastVersionChangeCommitFallback(packageJsonPath) {
-        try {
-            const log = await git.log({
-                file: packageJsonPath,
-                maxCount: 50,
-            });
-            // Look for commits that actually changed the version
-            for (const commit of log.all) {
-                try {
-                    const diff = await git.diff([`${commit.hash}~1..${commit.hash}`, '--', packageJsonPath]);
-                    if (diff.includes('"version":')) {
-                        core.debug(`Found version change in commit: ${commit.hash} - ${commit.message}`);
-                        return commit.hash;
-                    }
-                }
-                catch {
-                    // Ignore errors for individual commits (might be initial commit)
-                }
-            }
-            return null;
-        }
-        catch (error) {
-            core.debug(`Failed to find last version change for ${packageJsonPath}: ${error}`);
+            core.debug(`-L approach failed: ${error}`);
             return null;
         }
     }
@@ -2835,13 +3048,18 @@ class MergeBaseTactic {
             if (lookback > 0) {
                 // Try to find merge base with lookback
                 const baseHashes = await this.getBaseHashes(lookback);
+                core.debug(`Checking ${baseHashes.length} recent commits for merge base`);
                 // Iterate through recent commits to find common ancestor
                 for (const commitHash of baseHashes) {
+                    core.debug(`Checking commit ${commitHash.substring(0, 8)} for merge base`);
                     const commonCommit = await this.commonCommit(remoteBaseBranch, commitHash);
                     if (commonCommit && commonCommit !== commitHash) {
                         core.debug(`Found merge base ${commonCommit.substring(0, 8)} using lookback commit ${commitHash.substring(0, 8)}`);
                         mergeBase = commonCommit;
                         break;
+                    }
+                    else {
+                        core.debug(`No common ancestor found for commit ${commitHash.substring(0, 8)}`);
                     }
                 }
             }
