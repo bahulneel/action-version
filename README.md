@@ -258,6 +258,6 @@ Please ensure all contributions include:
 
 ## 📚 Documentation
 
-- [Strategy Patterns](STRATEGY_PATTERNS.md) - Detailed strategy pattern documentation
+- [Strategy Patterns](docs/strategy-patterns.md) - Detailed strategy pattern documentation
 - [Conversion Summary](CONVERSION_SUMMARY.md) - TypeScript conversion details
 - [Architecture Guide](src/README.md) - Technical architecture overview

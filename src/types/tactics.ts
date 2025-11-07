@@ -23,6 +23,7 @@ export interface Tactic<T, C> {
  * Interface for a tactical plan.
  */
 export interface TacticalPlanInterface<T, C> {
+  name: string
   description?: string | undefined
   execute(context: C): Promise<T>
 }

@@ -1,13 +1,19 @@
 import 'source-map-support/register'
 import * as core from '@actions/core'
-import type { ActionConfiguration } from './types/index.js'
-import { setupGit, pushChanges, interpolateBranchTemplate } from './utils/git.js'
+import type {
+  ActionConfiguration,
+  GitOperationStrategy,
+  PackageManagerStrategy,
+} from './types/index.js'
 import { findRootPackage, createWorkspacePackages } from './utils/workspace.js'
-import { GitOperationStrategyFactory } from './strategies/git-operations/factory.js'
-import { PackageManagerFactory } from './strategies/package-managers/factory.js'
 import { ConfigurationService } from './services/configuration.js'
 import { VersionBumpService } from './services/version-bump.js'
 import { SummaryService } from './services/summary.js'
+import { SimpleGit } from './adapters/Git/SimpleGit.js'
+import { interpolateTemplate } from './utils/template.js'
+import { access } from 'node:fs/promises'
+import path from 'node:path'
+import { execSync } from 'node:child_process'
 
 /**
  * Main application class that orchestrates the version bump process.
@@ -19,6 +25,7 @@ class VersionBumpApplication {
   private tempRef: string | undefined
   private branchTemplate: string | undefined
   private hasBumped = false
+  private readonly git = new SimpleGit()
 
   /**
    * Run the complete version bump process.
@@ -33,15 +40,15 @@ class VersionBumpApplication {
         `📋 Configuration loaded: strategy=${config.strategy}, base=${config.baseBranch || 'none'}`
       )
 
-      // Step 2: Setup git and determine branches
-      const gitSetup = await setupGit(config.shouldCreateBranch, config.branchTemplate)
+      // Step 2: Setup git and determine branches (new adapter-based setup)
+      const gitSetup = await this.setupGit(config.shouldCreateBranch, config.branchTemplate)
       this.tempRef = gitSetup.tempRef
       this.branchTemplate = gitSetup.branchTemplate
 
       // Step 3: Load root package and initialize services
       const { pkg: rootPkg } = await findRootPackage()
-      const packageManager = PackageManagerFactory.getPackageManager()
-      const gitStrategy = GitOperationStrategyFactory.getStrategy('conventional')
+      const packageManager = await this.detectPackageManager()
+      const gitStrategy = this.createGitOperationStrategy()
 
       core.info(`📦 Package manager: ${packageManager.name}`)
       core.info(`🔧 Git strategy: ${gitStrategy.name}`)
@@ -127,16 +134,27 @@ class VersionBumpApplication {
           const { promises: fs } = await import('fs')
           const rootPkgContent = await fs.readFile('package.json', 'utf-8')
           const rootPkg = JSON.parse(rootPkgContent)
-          const versionedBranch = interpolateBranchTemplate(this.branchTemplate, {
+          const versionedBranch = interpolateTemplate(this.branchTemplate, {
             version: rootPkg.version,
           })
 
           core.info(`[git] Creating versioned branch: ${versionedBranch}`)
-          await pushChanges(versionedBranch, this.tempRef)
+          // Create branch ref from temp ref and push
+          try {
+            await this.git.raw('update-ref', `refs/heads/${versionedBranch}`, this.tempRef)
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            core.warning(`[git] Failed to create branch ref from temp ref: ${msg}`)
+          }
+          await this.git.push('origin', versionedBranch, ['--set-upstream', '--force'])
           core.setOutput('branch', versionedBranch)
         } else {
           // Fallback for when no temp ref was created
-          await pushChanges(this.outputBranch)
+          if (this.outputBranch) {
+            await this.git.push('origin', this.outputBranch, ['--set-upstream'])
+          } else {
+            await this.git.push()
+          }
           if (this.outputBranch) {
             core.setOutput('branch', this.outputBranch)
           }
@@ -153,10 +171,8 @@ class VersionBumpApplication {
       // Push tags even when no commits were made (when not creating branches)
       if (!this.outputBranch) {
         try {
-          const simpleGit = (await import('simple-git')).default
-          const git = simpleGit()
           core.info(`[git] Pushing tags only`)
-          await git.pushTags()
+          await this.git.pushTags()
           core.info(`[git] Successfully pushed tags`)
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error)
@@ -168,10 +184,8 @@ class VersionBumpApplication {
     // Clean up the temporary ref if it was created
     if (this.tempRef) {
       try {
-        const simpleGit = (await import('simple-git')).default
-        const git = simpleGit()
         core.info(`[git] Cleaning up temporary ref ${this.tempRef}`)
-        await git.raw('update-ref', '-d', this.tempRef)
+        await this.git.raw('update-ref', '-d', this.tempRef)
         core.debug(`[git] Successfully deleted temporary ref ${this.tempRef}`)
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
@@ -220,11 +234,8 @@ class VersionBumpApplication {
     tagPrereleases: boolean
   ): Promise<boolean> {
     try {
-      const simpleGit = (await import('simple-git')).default
-      const git = simpleGit()
-
       // Get latest tag
-      const tags = await git.tags(['--sort=-v:refname'])
+      const tags = await this.git.tags(['--sort=-v:refname'])
       const latestTag = tags.latest
 
       if (!latestTag) {
@@ -245,6 +256,120 @@ class VersionBumpApplication {
     } catch (error) {
       core.warning(`Failed to check if should create tag: ${error}`)
       return false
+    }
+  }
+
+  // Configure git and optionally create a temporary ref for branching
+  private async setupGit(shouldCreateBranch: boolean, branchTemplate: string) {
+    // Configure bot identity
+    await this.git.addConfig('user.name', 'github-actions[bot]')
+    await this.git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com')
+
+    // Best-effort fetch/unshallow
+    try {
+      core.debug('[git] Fetching all refs')
+      await this.git.fetch(['--all', '--prune', '--prune-tags'])
+    } catch (e) {
+      core.warning(`[git] fetch failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+    try {
+      await this.git.fetch(['--unshallow'])
+    } catch {
+      // noop if not shallow
+    }
+
+    if (!shouldCreateBranch) {
+      return { branchTemplate }
+    }
+
+    const tempRef = `refs/heads/temp-${Date.now()}`
+    core.info(`[git] Creating temporary ref ${tempRef} from HEAD`)
+    await this.git.raw('update-ref', tempRef, 'HEAD')
+    return { tempRef, branchTemplate }
+  }
+
+  // Minimal package manager detection and implementation
+  private async detectPackageManager(): Promise<PackageManagerStrategy> {
+    const cwd = process.cwd()
+    const exists = async (p: string) => {
+      try {
+        await access(p)
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    type PM = 'pnpm' | 'yarn' | 'npm'
+    let pm: PM = 'npm'
+    if (await exists(path.join(cwd, 'pnpm-lock.yaml'))) pm = 'pnpm'
+    else if (await exists(path.join(cwd, 'yarn.lock'))) pm = 'yarn'
+    else if (await exists(path.join(cwd, 'package-lock.json'))) pm = 'npm'
+
+    const run = (cmd: string, dir: string) =>
+      execSync(cmd, { cwd: dir, stdio: 'pipe', encoding: 'utf-8', timeout: 120_000 })
+
+    const strategy: PackageManagerStrategy = {
+      name: pm,
+      isAvailable: () => true,
+      async test(packageDir: string) {
+        try {
+          const cmd = pm === 'pnpm' ? 'pnpm test' : pm === 'yarn' ? 'yarn test' : 'npm test'
+          run(cmd, packageDir)
+          return { success: true }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          return { success: false, error: msg }
+        }
+      },
+      async install(packageDir: string) {
+        const cmd =
+          pm === 'pnpm'
+            ? 'pnpm install --frozen-lockfile'
+            : pm === 'yarn'
+            ? 'yarn install --frozen-lockfile'
+            : 'npm ci'
+        execSync(cmd, { cwd: packageDir, stdio: 'inherit', timeout: 300_000 })
+      },
+    }
+    core.info(`📦 Package manager: ${strategy.name}`)
+    return strategy
+  }
+
+  // Minimal git operation strategy using SimpleGit and templates
+  private createGitOperationStrategy(): GitOperationStrategy {
+    const git = this.git
+    return {
+      name: 'simple',
+      async commitVersionChange(packageDir, packageName, version, bumpType, template) {
+        const message = template
+          ? interpolateTemplate(template, { packageName, version, bumpType })
+          : `chore${packageName === 'root' ? '' : `(${packageName})`}: bump to ${version}`
+        await git.add(path.join(packageDir, 'package.json'))
+        await git.commit(message)
+      },
+      async commitDependencyUpdate(packageDir, packageName, depName, depVersion, template) {
+        const message = template
+          ? interpolateTemplate(template, {
+              packageName,
+              dependencyName: depName,
+              dependencyVersion: depVersion,
+            })
+          : `chore${
+              packageName === 'root' ? '' : `(${packageName})`
+            }: update ${depName} to ${depVersion}`
+        await git.add(path.join(packageDir, 'package.json'))
+        await git.commit(message)
+      },
+      async tagVersion(version, _isPrerelease, shouldTag) {
+        if (!shouldTag) return
+        const tag = `v${version}`
+        await git.addTag(tag)
+      },
+      async prepareVersionBranch(versionedBranch, tempRef) {
+        if (!tempRef) return
+        await git.raw('update-ref', `refs/heads/${versionedBranch}`, tempRef)
+      },
     }
   }
 }

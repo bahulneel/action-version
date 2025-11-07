@@ -1,0 +1,52 @@
+/**
+ * Git adapter interface and related types.
+ * Provides abstraction over git operations.
+ */
+
+export interface GitBranches {
+  readonly all: readonly string[]
+  readonly current: string
+}
+
+export interface GitSetupResult {
+  readonly currentBranch: string
+  readonly newBranch: string | undefined
+  readonly tempRef?: string
+  readonly branchTemplate?: string
+}
+
+/**
+ * Git adapter interface.
+ * Abstracts git operations from specific implementations.
+ */
+export interface Git {
+  // Branch operations
+  branch(options: string[]): Promise<GitBranches>
+  checkout(ref: string | string[]): Promise<void>
+  deleteLocalBranch(branchName: string, force?: boolean): Promise<void>
+
+  // Commit operations
+  add(file: string): Promise<void>
+  commit(message: string): Promise<void>
+
+  // Tag operations
+  tag(options: string[]): Promise<void>
+  addTag(tagName: string): Promise<void>
+  pushTags(): Promise<void>
+  tags(options?: string[]): Promise<{ latest: string | null }>
+
+  // Reference operations
+  revparse(refs: string[]): Promise<string>
+  raw(command: string, ...args: string[]): Promise<void>
+
+  // Remote operations
+  push(remote?: string, branch?: string, options?: string[]): Promise<void>
+  fetch(options: string[]): Promise<void>
+
+  // Log operations
+  log(options: string[]): Promise<{ all: any[] }>
+  diff(options: string[]): Promise<string>
+
+  // Configuration
+  addConfig(key: string, value: string): Promise<void>
+}

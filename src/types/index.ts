@@ -24,6 +24,7 @@ export interface ActionConfiguration {
 }
 
 // Git operation interfaces
+// Note: GitBranches moved to git.ts, keeping here for backward compatibility
 export interface GitBranches {
   readonly all: readonly string[]
   readonly current: string
@@ -104,6 +105,7 @@ export interface GitOperationStrategy {
     template: string
   ): Promise<void>
   tagVersion(version: string, isPrerelease: boolean, shouldTag: boolean): Promise<void>
+  prepareVersionBranch(versionedBranch: string, tempRef: string): Promise<void>
 }
 
 export interface PackageManagerStrategy {
@@ -207,3 +209,9 @@ export function isGitOperationStrategyType(value: string): value is GitOperation
 export function isPackageManagerType(value: string): value is PackageManagerType {
   return ['npm', 'yarn', 'pnpm'].includes(value)
 }
+
+// Export new type modules
+export type { Objective } from './objectives.js'
+export type { Git } from './git.js'
+export type { Config } from './config.js'
+export type * from './strategies/index.js'
