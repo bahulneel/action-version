@@ -22,4 +22,3 @@ Kind: Composite Strategy with sub‑objectives
   - `src/strategies/Commit/strategies/Format*` holds sub‑objective implementations.
 
 Design intent: keep the strategy declarative and readable; move conditional decisions into tactics and selection into sub‑objectives.
-

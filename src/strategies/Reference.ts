@@ -1,12 +1,10 @@
-import type { Objective } from '../types/objectives.js'
-import type { Config } from '../types/config.js'
-import type { ReferenceStrategy } from '../types/strategies/reference.js'
+import type { Objective, Config, Discovery } from '../types/index.js'
 
 /**
  * Reference objective - resolves Reference strategies based on configuration.
  */
 export class Reference {
-  static strategise(config: Config): ReferenceStrategy {
+  static strategise(config: Config): Discovery {
     // Determine strategy based on configuration
     if (config.baseBranch) {
       // TODO: Import and return BaseBranchStrategy
@@ -18,7 +16,7 @@ export class Reference {
   }
 }
 
-Reference satisfies Objective<Config, ReferenceStrategy>
+Reference satisfies Objective<Config, Discovery>
 
 /**
  * Reference point result type.

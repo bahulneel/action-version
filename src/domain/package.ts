@@ -6,9 +6,9 @@ import type {
   BumpResult,
   BumpType,
   StrategyName,
-  GitOperationStrategy,
-  PackageManagerStrategy,
   TestResult,
+  VcsInterface,
+  PackageManager,
 } from '../types/index.js';
 import { DEPENDENCY_KEYS } from '../types/index.js';
 import { initializeVersion } from '../utils/version.js';
@@ -97,7 +97,7 @@ export class Package {
     referenceVersion: string,
     strategy: StrategyName,
     commitMsgTemplate: string,
-    gitStrategy: GitOperationStrategy,
+    gitStrategy: VcsInterface,
     shouldForceBump = false
   ): Promise<BumpResult | null> {
     this.initializeVersion();
@@ -149,7 +149,7 @@ export class Package {
    */
   public async finalizePrerelease(
     commitMsgTemplate: string,
-    gitStrategy: GitOperationStrategy
+    gitStrategy: VcsInterface
   ): Promise<BumpResult | null> {
     if (!this.version || !this.isPrerelease()) {
       return null;
@@ -179,7 +179,7 @@ export class Package {
     depName: string,
     newVersion: string,
     depCommitMsgTemplate: string,
-    gitStrategy: GitOperationStrategy
+    gitStrategy: VcsInterface
   ): Promise<boolean> {
     let updated = false;
 
@@ -210,7 +210,7 @@ export class Package {
   /**
    * Test compatibility after dependency updates.
    */
-  public async testCompatibility(packageManager: PackageManagerStrategy): Promise<TestResult> {
+  public async testCompatibility(packageManager: PackageManager): Promise<TestResult> {
     try {
       const testResult = await packageManager.test(this.dir);
       return testResult;

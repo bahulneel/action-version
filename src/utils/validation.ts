@@ -3,10 +3,7 @@ import type {
   ValidationError,
   BranchCleanupStrategyType,
 } from '../types/index.js';
-import {
-  isStrategyName,
-  isBranchCleanupStrategy,
-} from '../types/index.js';
+import { isStrategyName, isBranchCleanupStrategy } from '../utils/guards.js';
 
 /**
  * Custom validation error class.

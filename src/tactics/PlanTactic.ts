@@ -1,5 +1,5 @@
 import * as core from '@actions/core'
-import type { Tactic, TacticResult, TacticalPlanInterface } from '../types/tactics.js'
+import type { Tactic, TacticResult, TacticalPlanInterface } from '../types/index.js'
 
 /**
  * A tactical wrapper around a tactical plan.

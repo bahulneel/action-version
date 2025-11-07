@@ -3,21 +3,16 @@ import * as semver from 'semver'
 import simpleGit from 'simple-git'
 import type { Tactic, TacticResult } from '../../../../types/tactics.js'
 import type { ReferencePointResult } from '../../../../types/index.js'
-import type { ReferenceDiscoveryContext } from './types.js'
+import type { ReferenceDiscoveryContext } from '../../Reference/tactics/types.js'
 
 const git = simpleGit()
 
-/**
- * Highest version tag tactic.
- * Finds the git tag with the highest semantic version.
- */
 export class HighestVersionTagTactic
   implements Tactic<ReferencePointResult, ReferenceDiscoveryContext>
 {
   public readonly name = 'HighestVersionTag'
 
   public assess(_context: ReferenceDiscoveryContext): boolean {
-    // Always applicable - git tags command should work
     return true
   }
 
@@ -38,11 +33,10 @@ export class HighestVersionTagTactic
         }
       }
 
-      // Filter and sort tags by semantic version
       const versionTags = allTags
         .map((tag) => ({
           tag,
-          version: tag.replace(/^v/, ''), // Remove 'v' prefix
+          version: tag.replace(/^v/, ''),
           semver: semver.coerce(tag.replace(/^v/, '')),
         }))
         .filter(({ semver: sv }) => sv !== null)
@@ -57,8 +51,6 @@ export class HighestVersionTagTactic
       }
 
       const highestVersionTag = versionTags[0]
-
-      // Get the commit hash for this tag
       const commitHash = await git.revparse([highestVersionTag.tag])
 
       core.debug(
@@ -86,3 +78,5 @@ export class HighestVersionTagTactic
     }
   }
 }
+
+

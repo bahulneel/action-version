@@ -1,5 +1,5 @@
 import type { BumpType, CommitInfo } from '../index.js'
-import type { Strategy } from './index.js'
+import type { Strategy } from '../strategy.js'
 
 /**
  * Context for parsing commit messages.

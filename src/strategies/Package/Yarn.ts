@@ -3,16 +3,15 @@ import { execSync } from 'node:child_process';
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 import type { TestResult } from '../../types/index.js';
-import { BasePackageManagerStrategy } from './base.js';
+import type { PackageManager } from '../../types/strategies/package.js';
 
 /**
  * Yarn package manager strategy.
  * Handles Yarn-specific operations and commands.
  */
-export class YarnPackageManagerStrategy extends BasePackageManagerStrategy {
-  constructor() {
-    super('yarn');
-  }
+export class YarnPackageManagerStrategy implements PackageManager {
+  public readonly name = 'yarn' as const;
+  public readonly description?: string = 'Yarn package manager strategy';
 
   public isAvailable(): boolean {
     try {

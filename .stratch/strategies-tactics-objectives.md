@@ -137,24 +137,35 @@ Reference discovery (merge‑base, last version commit, tag heuristics) is a per
 - SetupGit → merge‑base → last‑version‑commit → diff‑based‑version‑commit → tag heuristics
 - The first successful tactic returns the reference point; others are skipped.
 
-### The File Layout (Designed for Reading First)
+### The File Layouts (Designed for Reading First)
 
 ```
 src/strategies/
-├── Commit.ts                # Objective: Config → Commit strategy
-├── Commit/                  # Strategy implementation
-│   ├── Strategy.ts          # Composite strategy
-│   ├── tactics/             # Atomic commit tactics (parse, etc.)
-│   └── strategies/          # Sub‑objectives (Format) and implementations
-├── Reference.ts             # Objective: Config → Reference strategy
+├── Commit.ts                # Objective → Composite strategy (plans + sub‑objectives)
+├── Commit/
+│   ├── Strategy.ts          # Composite orchestrator
+│   ├── tactics/             # Parsing tactics (conventional, best-guess)
+│   └── strategies/          # Sub‑objective: Format (conventional, template)
+├── Reference.ts             # Objective → Heuristic plan strategy (base-branch | tag)
 ├── Reference/
 │   ├── BranchCleanup.ts     # Objective for cleanup strategy
-│   └── tactics/             # Discovery/cleanup tactics
-├── Version.ts               # Objective: Config → Version strategy (WIP wiring)
+│   └── tactics/             # Heuristics: setup, merge-base, tags, etc.
+├── Version.ts               # Objective → Simple algorithmic strategies (apply, do-nothing, pre-release)
+├── Package.ts               # Objective → Environment-selected (npm | yarn | pnpm)
+├── Output.ts                # Objective → Environment-selected (GHA summary | console)
+├── Vcs.ts                   # Objective → Direct strategy (Git; future kinds TBD)
 └── ...
 ```
 
-And the base shapes live under `src/types/strategies/*` as TypeScript interfaces. Implementation classes carry the `Strategy` suffix; the base remains an interface. This keeps coupling light and intent obvious.
+And the base shapes live under `src/types/strategies/*` as TypeScript interfaces. Implementation classes carry the `Strategy` suffix; the base remains an interface. This keeps coupling light and intent obvious. The repaired type system clarifies each objective’s contract and normalizes strategy surfaces across domains.
+
+### Strategy Kinds (with one example each)
+
+- Composite Strategy (Commit): multiple plans and a sub‑objective (Format) orchestrated by a single strategy.
+- Heuristic Plan (Reference): a plan of discovery tactics with stop‑on‑success semantics.
+- Simple Algorithmic (Version): one clear algorithm per strategy; objective selects by config.
+- Environment‑selected (Package, Output): objective picks a strategy based on environment/config.
+- Direct Strategy (Vcs): objective returns the concrete VCS strategy; the surface abstracts core operations.
 
 ### Error Handling Philosophy
 

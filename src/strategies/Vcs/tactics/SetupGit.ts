@@ -10,9 +10,6 @@ export interface GitSetupContext {
   branchTemplate: string
 }
 
-/**
- * SetupGitTactic - Configure git and setup repository for version operations.
- */
 export class SetupGitTactic implements Tactic<GitSetupResult, GitSetupContext> {
   public readonly name = 'SetupGit'
 
@@ -24,11 +21,9 @@ export class SetupGitTactic implements Tactic<GitSetupResult, GitSetupContext> {
     context: GitSetupContext
   ): Promise<TacticResult<GitSetupResult, GitSetupContext>> {
     try {
-      // Configure git user
       await git.addConfig('user.name', 'github-actions[bot]')
       await git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com')
 
-      // Fetch all branches with full history
       try {
         core.debug(`[git] Fetching all branches with full history`)
         await git.fetch(['--all', '--prune', '--prune-tags'])
@@ -38,7 +33,6 @@ export class SetupGitTactic implements Tactic<GitSetupResult, GitSetupContext> {
         core.warning(`[git] Failed to fetch all branches: ${errorMessage}`)
       }
 
-      // Try to unshallow if this is a shallow repository
       try {
         core.debug(`[git] Attempting to unshallow repository`)
         await git.fetch(['--unshallow'])
@@ -47,7 +41,6 @@ export class SetupGitTactic implements Tactic<GitSetupResult, GitSetupContext> {
         core.debug(`[git] Repository is not shallow or unshallow failed`)
       }
 
-      // Create temporary ref for work
       const tempRef = `refs/heads/temp-${Date.now()}`
       const currentBranch = (await git.branch()).current
 
@@ -75,3 +68,5 @@ export class SetupGitTactic implements Tactic<GitSetupResult, GitSetupContext> {
     }
   }
 }
+
+

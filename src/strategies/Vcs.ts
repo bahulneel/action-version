@@ -1,4 +1,4 @@
-import type { VcsInterface, VcsConfig } from '../types/strategies/vcs.js'
+import type { VcsInterface, VcsConfig } from '../types/index.js'
 import { Strategy } from './Vcs/Strategy.js'
 
 /**

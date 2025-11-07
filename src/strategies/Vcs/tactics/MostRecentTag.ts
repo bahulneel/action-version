@@ -2,21 +2,16 @@ import * as core from '@actions/core'
 import simpleGit from 'simple-git'
 import type { Tactic, TacticResult } from '../../../../types/tactics.js'
 import type { ReferencePointResult } from '../../../../types/index.js'
-import type { ReferenceDiscoveryContext } from './types.js'
+import type { ReferenceDiscoveryContext } from '../../Reference/tactics/types.js'
 
 const git = simpleGit()
 
-/**
- * Most recent tag tactic.
- * Finds the most recently created git tag.
- */
 export class MostRecentTagTactic
   implements Tactic<ReferencePointResult, ReferenceDiscoveryContext>
 {
   public readonly name = 'MostRecentTag'
 
   public assess(_context: ReferenceDiscoveryContext): boolean {
-    // Always applicable - git tags command should work
     return true
   }
 
@@ -37,10 +32,7 @@ export class MostRecentTagTactic
         }
       }
 
-      // Get the commit hash for this tag
       const commitHash = await git.revparse([latestTag])
-
-      // Extract version from tag (remove 'v' prefix if present)
       const version = latestTag.replace(/^v/, '')
 
       core.debug(`[${this.name}] Found most recent tag: ${latestTag} (${version})`)
@@ -66,3 +58,5 @@ export class MostRecentTagTactic
     }
   }
 }
+
+

@@ -1,12 +1,10 @@
-import type { Objective } from '../types/objectives.js'
-import type { Config } from '../types/config.js'
-import type { VersionStrategy } from '../types/strategies/version.js'
+import type { Objective, Config, VersionBump } from '../types/index.js'
 
 /**
  * Version objective - resolves Version strategies based on configuration.
  */
 export class Version {
-  static strategise(config: Config): VersionStrategy {
+  static strategise(config: Config): VersionBump {
     switch (config.bumpStrategy) {
       case 'do-nothing':
         // TODO: Import and return DoNothingStrategy
@@ -23,4 +21,4 @@ export class Version {
   }
 }
 
-Version satisfies Objective<Config, VersionStrategy>
+Version satisfies Objective<Config, VersionBump>

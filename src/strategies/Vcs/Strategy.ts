@@ -1,25 +1,18 @@
-import * as core from '@actions/core'
 import path from 'node:path'
 import { SimpleGit } from '../../adapters/Git/SimpleGit.js'
 import type { VcsInterface, VcsConfig } from '../../types/strategies/vcs.js'
 import type { BumpType, GitSetupResult } from '../../types/index.js'
 import { TacticalPlan } from '../../tactics/TacticalPlan.js'
-import { SetupGitTactic } from '../Reference/tactics/SetupGit.js'
-import type { GitSetupContext } from '../Reference/tactics/SetupGit.js'
+import { SetupGitTactic } from './tactics/SetupGit.js'
+import type { GitSetupContext } from './tactics/SetupGit.js'
 import { interpolateTemplate } from '../../utils/template.js'
 
-/**
- * Git-backed VCS Strategy.
- * Leverages the SetupGit tactic and SimpleGit adapter.
- */
 export class Strategy implements VcsInterface {
   public readonly name = 'git'
+  public readonly description?: string = 'Git-backed VCS strategy'
   private readonly git = new SimpleGit()
-  private readonly config: VcsConfig
 
-  constructor(config: VcsConfig) {
-    this.config = config
-  }
+  constructor(_config: VcsConfig) {}
 
   public async setup(context: GitSetupContext): Promise<GitSetupResult> {
     const plan = new TacticalPlan<GitSetupResult, GitSetupContext>(

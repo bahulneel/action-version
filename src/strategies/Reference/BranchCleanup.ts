@@ -1,5 +1,4 @@
-import type { Strategy } from '../../types/strategies/index.js'
-import type { BumpType } from '../../types/index.js'
+import type { Strategy, BumpType } from '../../types/index.js'
 
 /**
  * Branch cleanup configuration.

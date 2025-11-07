@@ -1,5 +1,5 @@
-import type { Strategy } from './index.js'
-import type { ActionConfiguration, BumpType, GitSetupResult } from '../../index.js'
+import type { Strategy } from '../strategy.js'
+import type { ActionConfiguration, BumpType, GitSetupResult } from '../index.js'
 
 /**
  * VCS configuration currently aligns with ActionConfiguration.
@@ -36,4 +36,4 @@ export interface VcsInterface extends Strategy {
   prepareVersionBranch(versionedBranch: string, tempRef?: string): Promise<void>
 }
 
-
+// Backwards-compatible alias for legacy naming used across services

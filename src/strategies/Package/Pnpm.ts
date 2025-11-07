@@ -3,16 +3,15 @@ import { execSync } from 'node:child_process';
 import { access } from 'node:fs/promises';
 import path from 'node:path';
 import type { TestResult } from '../../types/index.js';
-import { BasePackageManagerStrategy } from './base.js';
+import type { PackageManager } from '../../types/strategies/package.js';
 
 /**
  * PNPM package manager strategy.
  * Handles PNPM-specific operations and commands.
  */
-export class PnpmPackageManagerStrategy extends BasePackageManagerStrategy {
-  constructor() {
-    super('pnpm');
-  }
+export class PnpmPackageManagerStrategy implements PackageManager {
+  public readonly name = 'pnpm' as const;
+  public readonly description?: string = 'PNPM package manager strategy';
 
   public isAvailable(): boolean {
     try {

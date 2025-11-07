@@ -1,10 +1,6 @@
 import 'source-map-support/register'
 import * as core from '@actions/core'
-import type {
-  ActionConfiguration,
-  GitOperationStrategy,
-  PackageManagerStrategy,
-} from './types/index.js'
+import type { ActionConfiguration, VcsInterface, PackageManager } from './types/index.js'
 import { findRootPackage, createWorkspacePackages } from './utils/workspace.js'
 import { ConfigurationService } from './services/configuration.js'
 import { VersionBumpService } from './services/version-bump.js'
@@ -53,7 +49,7 @@ class VersionBumpApplication {
       // Step 3: Load root package and initialize services
       const { pkg: rootPkg } = await findRootPackage()
       const packageManager = await this.detectPackageManager()
-      const gitStrategy = vcs as unknown as GitOperationStrategy
+      const gitStrategy = vcs as unknown as VcsInterface
 
       core.info(`📦 Package manager: ${packageManager.name}`)
       core.info(`🔧 Git strategy: ${gitStrategy.name}`)
@@ -265,7 +261,7 @@ class VersionBumpApplication {
   }
 
   // Minimal package manager detection and implementation
-  private async detectPackageManager(): Promise<PackageManagerStrategy> {
+  private async detectPackageManager(): Promise<PackageManager> {
     const cwd = process.cwd()
     const exists = async (p: string) => {
       try {
@@ -285,7 +281,7 @@ class VersionBumpApplication {
     const run = (cmd: string, dir: string) =>
       execSync(cmd, { cwd: dir, stdio: 'pipe', encoding: 'utf-8', timeout: 120_000 })
 
-    const strategy: PackageManagerStrategy = {
+    const strategy: PackageManager = {
       name: pm,
       isAvailable: () => true,
       async test(packageDir: string) {

@@ -1,7 +1,5 @@
 import * as core from '@actions/core'
-import type { Tactic, TacticResult } from '../types/tactics.js'
-import type { Strategy } from '../types/strategies/index.js'
-import type { Objective } from '../types/objectives.js'
+import type { Tactic, TacticResult, Strategy, Objective } from '../types/index.js'
 
 /**
  * A tactical objective - coordinates a strategy to fulfill an objective through tactical execution.

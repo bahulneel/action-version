@@ -4,10 +4,10 @@ import { promises as fs } from 'fs'
 import type {
   ActionConfiguration,
   PackageJson,
-  GitOperationStrategy,
-  PackageManagerStrategy,
   BumpResult,
   ReferencePointResult,
+  VcsInterface,
+  PackageManager,
 } from '../types/index.js'
 import { Package } from '../domain/package.js'
 import { DiscoveryService } from './discovery.js'
@@ -34,8 +34,8 @@ export class VersionBumpService {
   private readonly discoveryService: DiscoveryService
 
   constructor(
-    private readonly gitStrategy: GitOperationStrategy,
-    private readonly packageManager: PackageManagerStrategy
+    private readonly gitStrategy: VcsInterface,
+    private readonly packageManager: PackageManager
   ) {
     this.discoveryService = new DiscoveryService()
   }

@@ -1,6 +1,4 @@
-import type { Objective } from '../types/objectives.js'
-import type { Config } from '../types/config.js'
-import type { CommitStrategy } from '../types/strategies/commit.js'
+import type { Objective, Config, CommitStrategy } from '../types/index.js'
 import { Strategy } from './Commit/Strategy.js'
 
 /**
