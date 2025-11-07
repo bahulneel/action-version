@@ -1,6 +1,6 @@
 {
   "name": "action-version",
-  "version": "0.47.2",
+  "version": "0.47.3",
   "description": "GitHub Action for automated version bumping and dependency management in monorepos using Conventional Commits.",
   "license": "MIT",
   "main": "dist/index.cjs",
