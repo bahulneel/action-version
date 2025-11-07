@@ -14,6 +14,7 @@ import { interpolateTemplate } from './utils/template.js'
 import { access } from 'node:fs/promises'
 import path from 'node:path'
 import { execSync } from 'node:child_process'
+import { Vcs } from './strategies/Vcs.js'
 
 /**
  * Main application class that orchestrates the version bump process.
@@ -40,15 +41,19 @@ class VersionBumpApplication {
         `📋 Configuration loaded: strategy=${config.strategy}, base=${config.baseBranch || 'none'}`
       )
 
-      // Step 2: Setup git and determine branches (new adapter-based setup)
-      const gitSetup = await this.setupGit(config.shouldCreateBranch, config.branchTemplate)
+      // Step 2: Setup VCS via strategy (leverages SetupGit tactic)
+      const vcs = Vcs.strategise(config)
+      const gitSetup = await vcs.setup({
+        shouldCreateBranch: config.shouldCreateBranch,
+        branchTemplate: config.branchTemplate,
+      })
       this.tempRef = gitSetup.tempRef
       this.branchTemplate = gitSetup.branchTemplate
 
       // Step 3: Load root package and initialize services
       const { pkg: rootPkg } = await findRootPackage()
       const packageManager = await this.detectPackageManager()
-      const gitStrategy = this.createGitOperationStrategy()
+      const gitStrategy = vcs as unknown as GitOperationStrategy
 
       core.info(`📦 Package manager: ${packageManager.name}`)
       core.info(`🔧 Git strategy: ${gitStrategy.name}`)
@@ -259,35 +264,6 @@ class VersionBumpApplication {
     }
   }
 
-  // Configure git and optionally create a temporary ref for branching
-  private async setupGit(shouldCreateBranch: boolean, branchTemplate: string) {
-    // Configure bot identity
-    await this.git.addConfig('user.name', 'github-actions[bot]')
-    await this.git.addConfig('user.email', 'github-actions[bot]@users.noreply.github.com')
-
-    // Best-effort fetch/unshallow
-    try {
-      core.debug('[git] Fetching all refs')
-      await this.git.fetch(['--all', '--prune', '--prune-tags'])
-    } catch (e) {
-      core.warning(`[git] fetch failed: ${e instanceof Error ? e.message : String(e)}`)
-    }
-    try {
-      await this.git.fetch(['--unshallow'])
-    } catch {
-      // noop if not shallow
-    }
-
-    if (!shouldCreateBranch) {
-      return { branchTemplate }
-    }
-
-    const tempRef = `refs/heads/temp-${Date.now()}`
-    core.info(`[git] Creating temporary ref ${tempRef} from HEAD`)
-    await this.git.raw('update-ref', tempRef, 'HEAD')
-    return { tempRef, branchTemplate }
-  }
-
   // Minimal package manager detection and implementation
   private async detectPackageManager(): Promise<PackageManagerStrategy> {
     const cwd = process.cwd()
@@ -336,42 +312,7 @@ class VersionBumpApplication {
     return strategy
   }
 
-  // Minimal git operation strategy using SimpleGit and templates
-  private createGitOperationStrategy(): GitOperationStrategy {
-    const git = this.git
-    return {
-      name: 'simple',
-      async commitVersionChange(packageDir, packageName, version, bumpType, template) {
-        const message = template
-          ? interpolateTemplate(template, { packageName, version, bumpType })
-          : `chore${packageName === 'root' ? '' : `(${packageName})`}: bump to ${version}`
-        await git.add(path.join(packageDir, 'package.json'))
-        await git.commit(message)
-      },
-      async commitDependencyUpdate(packageDir, packageName, depName, depVersion, template) {
-        const message = template
-          ? interpolateTemplate(template, {
-              packageName,
-              dependencyName: depName,
-              dependencyVersion: depVersion,
-            })
-          : `chore${
-              packageName === 'root' ? '' : `(${packageName})`
-            }: update ${depName} to ${depVersion}`
-        await git.add(path.join(packageDir, 'package.json'))
-        await git.commit(message)
-      },
-      async tagVersion(version, _isPrerelease, shouldTag) {
-        if (!shouldTag) return
-        const tag = `v${version}`
-        await git.addTag(tag)
-      },
-      async prepareVersionBranch(versionedBranch, tempRef) {
-        if (!tempRef) return
-        await git.raw('update-ref', `refs/heads/${versionedBranch}`, tempRef)
-      },
-    }
-  }
+  // (unused) legacy git operation strategy left intentionally removed
 }
 
 /**

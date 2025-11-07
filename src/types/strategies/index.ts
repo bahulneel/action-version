@@ -17,3 +17,4 @@ export type { BranchCleanupInterface, BranchCleanupConfig } from './reference/br
 export type { OutputInterface, OutputConfig } from './output.js'
 export type { CommitInterface, CommitConfig } from './commit.js'
 export type { ReferenceInterface, ReferenceConfig } from './reference.js'
+export type { VcsInterface, VcsConfig } from './vcs.js'

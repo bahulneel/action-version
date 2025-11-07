@@ -1,329 +1,382 @@
-# Strategy Patterns Implementation
+# Strategies with Tactics: Architecture Guide
+
+This project implements Strategies composed of Tactics, guided by the ideas in “When Your Strategy Needs a Strategy: Tactical Error or Unfinished Business.” See: [Medium: When Your Strategy Needs a Strategy](https://medium.com/gitconnected/when-your-strategy-needs-a-strategy-tactical-error-or-unfinished-business-e42129792032).
 
 ## Overview
 
-The codebase has been significantly refactored to implement multiple Strategy patterns, making the code more extensible, maintainable, and following SOLID design principles.
+Traditional Strategy Pattern reduces conditional complexity at the point of selecting an algorithm. In practice, conditional complexity often migrates inside the strategy implementation. This codebase addresses that by introducing a tactical layer: strategies are declarative compositions of small, self-contained tactics orchestrated by a `TacticalPlan`.
 
-## Implemented Strategy Patterns
+Core ideas:
 
-### 1. 🎯 Version Bump Strategy Pattern
+- Strategies expose a clear interface per domain (Version, Reference, Commit, Package, Output).
+- Tactics encapsulate applicability and execution for one conditional path.
+- Tactical plans orchestrate an ordered set of tactics and merge updated context.
+- Objectives map configuration to a concrete strategy (Config → Objective → Strategy).
 
-**Purpose**: Handle different version bumping strategies when the same bump type is detected.
+## Strategy File Layout
 
-**Before** (Switch Statement):
-```javascript
-switch (strategy) {
-  case 'do-nothing':
-    return null; // Skip bump
-  case 'apply-bump':
-    return semver.inc(current, commitBasedBump);
-  case 'pre-release':
-    // Complex prerelease logic...
-    return nextVersion;
-  default:
-    throw new Error(`Unknown strategy: ${strategy}`);
-}
+Each domain strategy follows a consistent layout that separates concerns and keeps the Strategy layer thin by composing Tactics:
+
+```
+src/strategies/
+├── <Domain>.ts                # Objective: Config → <Domain>Strategy (entry point)
+└── <Domain>/                  # Strategy implementation details
+    ├── Strategy.ts            # (Optional) Composite strategy orchestrator for the domain
+    ├── tactics/               # Domain-specific Tactics (atomic, assess + attempt)
+    └── strategies/            # Sub-objectives and concrete strategy classes
 ```
 
-**After** (Strategy Pattern):
-```javascript
-class VersionBumpStrategy {
-  execute(currentVersion, commitBasedBump, historicalBump) {
-    throw new Error('Strategy must implement execute method')
-  }
-}
+- <Domain>.ts provides a stable module interface for the folder (root file named like the folder).
+- <Domain>/Strategy.ts composes one or more `TacticalPlan`s and/or `ObjectiveTactic`s.
+- <Domain>/tactics contains small, reusable units that encapsulate conditional paths.
+- <Domain>/strategies contains sub-objectives and their concrete implementations.
+- The base shapes live in `src/types/strategies/<domain>.ts` (interfaces only).
 
-class DoNothingStrategy extends VersionBumpStrategy {
-  execute(currentVersion, commitBasedBump, historicalBump) {
-    return currentVersion // No change
-  }
-}
+Examples from the repo:
 
-class ApplyBumpStrategy extends VersionBumpStrategy {
-  execute(currentVersion, commitBasedBump, historicalBump) {
-    const current = semver.coerce(currentVersion) || '0.0.0'
-    return semver.inc(current, commitBasedBump)
-  }
-}
+Commit objective mapping to a concrete strategy:
 
-class PreReleaseStrategy extends VersionBumpStrategy {
-  execute(currentVersion, commitBasedBump, historicalBump) {
-    // Complex prerelease logic encapsulated
+```6:12:/Users/bahulneel/Projects/bahulneel/action-version/src/strategies/Commit.ts
+export class Commit {
+  static strategise(config: Config): CommitStrategy {
+    return new Strategy(config)
   }
 }
 ```
 
-**Available Strategies**:
-- `do-nothing`: Skip version bump
-- `apply-bump`: Normal semver increment
-- `pre-release`: Create/increment prerelease versions
+Commit composite strategy orchestrating plans and sub-objectives:
 
-**Benefits**:
-- ✅ Easy to add new strategies without modifying existing code
-- ✅ Each strategy is self-contained and testable
-- ✅ Eliminates switch statement complexity
+```19:29:/Users/bahulneel/Projects/bahulneel/action-version/src/strategies/Commit/Strategy.ts
+export class Strategy implements CommitStrategy {
+  public readonly name = 'commit'
+  private parsingPlan: TacticalPlan<CommitInfo[], ParseCommitsContext>
+  private formatVersionPlan: TacticalPlan<string, FormatVersionContext>
+  private formatDependencyPlan: TacticalPlan<string, FormatDependencyContext>
+```
 
-### 2. 🌿 Branch Cleanup Strategy Pattern
+Reference domain tactics are grouped under `Reference/tactics` (e.g., `SetupGit.ts`, `merge-base.ts`, tag-based heuristics).
 
-**Purpose**: Handle different branch cleanup strategies after version bumping.
+Version and Reference objectives exist at `src/strategies/Version.ts` and `src/strategies/Reference.ts` respectively and will wire specific concrete strategies in `Version/*` and `Reference/*`.
 
-**Before** (If/Else Logic):
-```javascript
-if (branchCleanup === 'prune' || branchCleanup === 'semantic') {
-  for (const branch of branches.all) {
-    // Complex cleanup logic with nested conditions
-    if (branchCleanup === 'semantic' && bumpType !== rootBump) {
-      continue
+## Core Abstractions (as implemented)
+
+### Tactic and TacticResult
+
+```1:20:/Users/bahulneel/Projects/bahulneel/action-version/src/types/tactics.ts
+/**
+ * Base result from a tactic execution.
+ * Only reports what happened - doesn't dictate strategy behavior.
+ */
+export interface TacticResult<T = any, C = any> {
+  applied: boolean // Did the tactic attempt to execute?
+  success: boolean // If applied, did it succeed?
+  result?: T // The actual result if successful
+  context?: Partial<C> // Updated context information
+  message?: string // Descriptive message about what happened
+}
+
+/**
+ * Interface that all tactics must implement.
+ */
+export interface Tactic<T, C> {
+  name: string
+  assess(context: C): boolean
+  attempt(context: C): Promise<TacticResult<T, C>>
+}
+```
+
+### TacticalPlan
+
+```1:31:/Users/bahulneel/Projects/bahulneel/action-version/src/tactics/TacticalPlan.ts
+import * as core from '@actions/core'
+import type { Tactic, TacticalPlanInterface } from '../types/tactics.js'
+
+/**
+ * A tactical plan - coordinates the execution of an ordered sequence of tactics.
+ */
+export class TacticalPlan<T, C> implements TacticalPlanInterface<T, C> {
+  public readonly name: string
+  public readonly description?: string | undefined
+
+  constructor(private tactics: Tactic<T, C>[], name: string, description?: string) {
+    this.name = name
+    this.description = description
+  }
+```
+
+```16:61:/Users/bahulneel/Projects/bahulneel/action-version/src/tactics/TacticalPlan.ts
+  public async execute(context: C): Promise<T> {
+    if (this.tactics.length === 0) {
+      throw new Error('No tactics in this plan')
     }
-    // Delete branch logic...
+
+    core.info(`🎯 Executing tactical plan with ${this.tactics.length} tactics`)
+    if (this.description) {
+      core.debug(`📋 Plan: ${this.description}`)
+    }
+
+    for (const tactic of this.tactics) {
+      core.debug(`🎯 Executing tactic: ${tactic.name}`)
+
+      // Assess if this tactic is applicable
+      if (!tactic.assess(context)) {
+        core.debug(`⏭️ ${tactic.name}: Not applicable to this context`)
+        continue
+      }
+
+      try {
+        const result = await tactic.attempt(context)
+
+        // Update context with any new information
+        if (result.context && typeof context === 'object' && context !== null) {
+          Object.assign(context, result.context)
+        }
+
+        if (result.applied && result.success && result.result) {
+          core.info(`✅ ${tactic.name}: ${result.message || 'Success'}`)
+          return result.result
+        } else if (result.applied && !result.success) {
+          core.debug(`❌ ${tactic.name}: ${result.message || 'Failed'}`)
+        } else {
+          core.debug(`⏭️ ${tactic.name}: ${result.message || 'Not applied'}`)
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        core.debug(`❌ ${tactic.name}: Error - ${errorMessage}`)
+        // Continue to next tactic on error
+      }
+    }
+
+    throw new Error(`All ${this.tactics.length} tactics in plan exhausted`)
   }
 }
 ```
 
-**After** (Strategy Pattern):
-```javascript
-class BranchCleanupStrategy {
-  async execute(branches, versionedBranch, templateRegex, rootBump) {
-    throw new Error('Strategy must implement execute method')
-  }
-}
+### ObjectiveTactic and PlanTactic
 
-class KeepAllBranchesStrategy extends BranchCleanupStrategy {
-  async execute() {
-    // Do nothing - keep all branches
-  }
-}
+```11:23:/Users/bahulneel/Projects/bahulneel/action-version/src/tactics/ObjectiveTactic.ts
+export class ObjectiveTactic<T, C, TConfig, TStrategy extends Strategy> implements Tactic<T, C> {
+  public readonly name: string
+  private readonly strategy: TStrategy
 
-class PruneOldBranchesStrategy extends BranchCleanupStrategy {
-  async execute(branches, versionedBranch, templateRegex, rootBump) {
-    // Remove all old version branches
+  constructor(
+    private objective: Objective<TConfig, TStrategy>,
+    private config: TConfig,
+    private strategicCommandName: Exclude<keyof TStrategy, 'name'> & string,
+    name?: string
+  ) {
+    this.strategy = this.objective.strategise(this.config)
+    this.name = name || `ObjectiveTactic(${this.strategy.name}.${this.strategicCommandName})`
   }
-}
+```
 
-class SemanticBranchesStrategy extends BranchCleanupStrategy {
-  async execute(branches, versionedBranch, templateRegex, rootBump) {
-    // Keep only branches with different bump types
+```8:49:/Users/bahulneel/Projects/bahulneel/action-version/src/tactics/PlanTactic.ts
+export class PlanTactic<T, C> implements Tactic<T, C> {
+  public readonly name: string
+
+  constructor(private plan: TacticalPlanInterface<T, C>) {
+    this.name = `${this.plan.name}Tactic`
+  }
+
+  public async attempt(context: C): Promise<TacticResult<T, C>> {
+    try {
+      core.debug(`🎯 Attempting plan tactic: ${this.name}`)
+
+      const result = await this.plan.execute(context)
+
+      return {
+        applied: true,
+        success: true,
+        result,
+        message: `Plan executed successfully`,
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      core.debug(`❌ ${this.name}: Error - ${errorMessage}`)
+
+      return {
+        applied: true,
+        success: false,
+        message: `Plan execution failed: ${errorMessage}`,
+      }
+    }
   }
 }
 ```
 
-**Available Strategies**:
-- `keep`: Keep all version branches
-- `prune`: Remove all old version branches
-- `semantic`: Keep only branches with different bump types
+### Objectives (Config → Strategy)
 
-**Benefits**:
-- ✅ Modular branch cleanup logic
-- ✅ Easy to add new cleanup strategies (e.g., time-based, count-based)
-- ✅ Eliminates complex conditional logic
+Objectives resolve a concrete strategy from configuration:
 
-### 3. 📍 Reference Point Strategy Pattern
-
-**Purpose**: Determine version reference point (tags vs branches).
-
-**Before** (Complex If/Else):
-```javascript
-if (baseBranch) {
-  // Branch-based reference logic
-  const branch = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`
-  referenceCommit = await lastNonMergeCommit(git, branch)
-  // More complex logic...
-}
-else {
-  // Tag-based reference logic
-  const tags = await git.tags(['--sort=-v:refname'])
-  // More logic...
+```1:9:/Users/bahulneel/Projects/bahulneel/action-version/src/types/objectives.ts
+export interface Objective<TConfig, TStrategy> {
+  strategise(config: TConfig): TStrategy
 }
 ```
 
-**After** (Strategy Pattern):
-```javascript
-class ReferencePointStrategy {
-  async execute(baseBranch, activeBranch) {
-    throw new Error('Strategy must implement execute method')
-  }
-}
+Example: Commit formatting sub-objective selects a `Format` strategy:
 
-class TagBasedReferenceStrategy extends ReferencePointStrategy {
-  async execute(baseBranch, activeBranch) {
-    // Tag-based reference logic
-    const tags = await git.tags(['--sort=-v:refname'])
-    // Return reference info
-  }
-}
-
-class BranchBasedReferenceStrategy extends ReferencePointStrategy {
-  async execute(baseBranch, activeBranch) {
-    // Branch-based reference logic
-    // Include prerelease finalization logic
+```10:19:/Users/bahulneel/Projects/bahulneel/action-version/src/strategies/Commit/strategies/Format.ts
+export class Format {
+  static strategise(config: Config): FormatCommitStrategy {
+    switch (config.commitFormat) {
+      case 'conventional':
+        return new Conventional()
+      case 'template':
+        return new Template(config.commitMsgTemplate, config.depCommitMsgTemplate)
+      default:
+        throw new Error(`Unknown commit format: ${config.commitFormat}`)
+    }
   }
 }
 ```
 
-**Available Strategies**:
-- `TagBasedReferenceStrategy`: Use latest git tag as reference
-- `BranchBasedReferenceStrategy`: Use specific branch as reference
+## How Strategies Compose Tactics (Examples)
 
-**Benefits**:
-- ✅ Clear separation of tag vs branch logic
-- ✅ Encapsulates prerelease finalization detection
-- ✅ Easy to add new reference strategies (e.g., commit-based, time-based)
+### Commit Strategy
 
-### 4. 📦 Package Manager Detection Strategy Pattern
+The high-level Commit strategy composes multiple tactical plans and sub-objectives for parsing and formatting:
 
-**Purpose**: Detect package manager in use (yarn, npm, pnpm).
+```19:34:/Users/bahulneel/Projects/bahulneel/action-version/src/strategies/Commit/Strategy.ts
+export class Strategy implements CommitStrategy {
+  public readonly name = 'commit'
+  private parsingPlan: TacticalPlan<CommitInfo[], ParseCommitsContext>
+  private formatVersionPlan: TacticalPlan<string, FormatVersionContext>
+  private formatDependencyPlan: TacticalPlan<string, FormatDependencyContext>
 
-**Before** (Simple If Statement):
-```javascript
-function getPackageManager() {
-  if (fs.stat(path.join(process.cwd(), 'yarn.lock')).catch(() => false))
-    return 'yarn'
-  return 'npm'
+  constructor(config: Config) {
+    // Parsing plan with tactics
+    this.parsingPlan = new TacticalPlan(
+      [new ConventionalCommitTactic(), new BestGuessCommitTactic()],
+      'CommitParsing',
+      'Parse commits using conventional or heuristic tactics'
+    )
+```
+
+```33:58:/Users/bahulneel/Projects/bahulneel/action-version/src/strategies/Commit/Strategy.ts
+    // Format version plan with objective tactic
+    this.formatVersionPlan = new TacticalPlan(
+      [new ObjectiveTactic(Format, config, 'formatVersion', 'FormatVersion')],
+      'FormatVersion',
+      'Format version commit messages'
+    )
+
+    // Format dependency plan with objective tactic
+    this.formatDependencyPlan = new TacticalPlan(
+      [new ObjectiveTactic(Format, config, 'formatDependency', 'FormatDependency')],
+      'FormatDependency',
+      'Format dependency commit messages'
+    )
+  }
+```
+
+### Reference Tactics
+
+Discovery and branch workflows use discrete tactics (e.g., preparing git state):
+
+```16:23:/Users/bahulneel/Projects/bahulneel/action-version/src/strategies/Reference/tactics/SetupGit.ts
+export class SetupGitTactic implements Tactic<GitSetupResult, GitSetupContext> {
+  public readonly name = 'SetupGit'
+
+  public assess(context: GitSetupContext): boolean {
+    return Boolean(context.branchTemplate)
+  }
+```
+
+Representative tactics in `src/strategies/Reference/tactics/`:
+
+- `SetupGit.ts` – repository setup and unshallowing
+- `merge-base.ts` – merge-base discovery
+- `last-version-commit.ts` / `diff-based-version-commit.ts` – version commit discovery
+- `MostRecentTag.ts` / `HighestVersionTag.ts` – tag heuristics
+- `execute-plan.ts`, `VersionCommit.ts`, `fallback-version-commit.ts` – orchestration utilities
+
+### Branch Cleanup Objective
+
+Branch cleanup is modelled as an objective that selects a cleanup strategy and exposes a `perform` command. Strategy selection is a placeholder in the current refactor and will resolve to concrete implementations:
+
+```23:31:/Users/bahulneel/Projects/bahulneel/action-version/src/strategies/Reference/BranchCleanup.ts
+export interface BranchCleanupInterface extends Strategy {
+  perform(
+    branches: GitBranches,
+    versionedBranch: string,
+    templateRegex: RegExp,
+    rootBump: BumpType
+  ): Promise<void>
 }
 ```
 
-**After** (Strategy Pattern):
-```javascript
-class PackageManagerStrategy {
-  detect() {
-    throw new Error('Strategy must implement detect method')
+## Version and Reference Objectives (WIP)
+
+Version and Reference are defined as objectives that will resolve to concrete strategies based on config; these are under active implementation and currently throw while wiring is completed:
+
+```8:23:/Users/bahulneel/Projects/bahulneel/action-version/src/strategies/Version.ts
+export class Version {
+  static strategise(config: Config): VersionStrategy {
+    switch (config.bumpStrategy) {
+      case 'do-nothing':
+        // TODO: Import and return DoNothingStrategy
+        throw new Error('DoNothingStrategy not yet implemented')
+      case 'apply-bump':
+        // TODO: Import and return ApplyBumpStrategy
+        throw new Error('ApplyBumpStrategy not yet implemented')
+      case 'pre-release':
+        // TODO: Import and return PreReleaseStrategy
+        throw new Error('PreReleaseStrategy not yet implemented')
+      default:
+        throw new Error(`Unknown bump strategy: ${config.bumpStrategy}`)
+    }
   }
 }
+```
 
-class YarnDetectionStrategy extends PackageManagerStrategy {
-  detect() {
-    // Check for yarn.lock
-  }
-}
-
-class NpmDetectionStrategy extends PackageManagerStrategy {
-  detect() {
-    // Check for package-lock.json
-  }
-}
-
-class PnpmDetectionStrategy extends PackageManagerStrategy {
-  detect() {
-    // Check for pnpm-lock.yaml
+```8:18:/Users/bahulneel/Projects/bahulneel/action-version/src/strategies/Reference.ts
+export class Reference {
+  static strategise(config: Config): ReferenceStrategy {
+    // Determine strategy based on configuration
+    if (config.baseBranch) {
+      // TODO: Import and return BaseBranchStrategy
+      throw new Error('BaseBranchStrategy not yet implemented')
+    } else {
+      // TODO: Import and return TagStrategy (fallback)
+      throw new Error('TagStrategy not yet implemented')
+    }
   }
 }
 ```
 
-**Available Strategies**:
-- `YarnDetectionStrategy`: Detects Yarn via yarn.lock
-- `NpmDetectionStrategy`: Detects NPM via package-lock.json
-- `PnpmDetectionStrategy`: Detects PNPM via pnpm-lock.yaml
+## Practical Benefits
 
-**Benefits**:
-- ✅ Extensible to new package managers
-- ✅ Clear precedence order (Yarn → PNPM → NPM)
-- ✅ Easy to add new detection methods
+- Reduced internal conditional complexity inside strategies
+- High reuse: tactics can be shared across strategies and plans
+- Improved testing: tactics and plans are unit-testable in isolation
+- Extensibility: add new tactics without modifying existing ones
 
-## Code Quality Improvements
+## Usage Patterns
 
-### Before Implementation:
-- **High Cyclomatic Complexity**: Multiple nested if/else statements
-- **Rigid Logic**: Hard to extend without modifying existing code
-- **Poor Testability**: Strategy logic mixed with orchestration logic
-- **Code Duplication**: Similar patterns repeated across functions
+Pattern for composing a strategy from tactics:
 
-### After Implementation:
-- **Low Cyclomatic Complexity**: Each strategy is simple and focused
-- **Open/Closed Principle**: Open for extension, closed for modification
-- **High Testability**: Each strategy can be tested in isolation
-- **Single Responsibility**: Each strategy has one clear purpose
-
-## Architecture Benefits
-
-### 1. **Extensibility**
-```javascript
-// Adding a new version bump strategy is trivial:
-class CustomStrategy extends VersionBumpStrategy {
-  execute(currentVersion, commitBasedBump, historicalBump) {
-    // Custom logic here
-  }
-}
-
-// Register it:
-VersionBumpStrategyFactory.strategies.custom = new CustomStrategy()
+```ts
+const plan = new TacticalPlan([tacticA, tacticB, tacticC], 'MyPlan', 'Do X using A→B→C')
+const result = await plan.execute(context)
 ```
 
-### 2. **Maintainability**
-- Each strategy is self-contained
-- Changes to one strategy don't affect others
-- Clear interfaces define expected behavior
+Pattern for delegating to a sub-objective:
 
-### 3. **Testability**
-```javascript
-// Unit test for specific strategy
-test('PreReleaseStrategy increments prerelease correctly', () => {
-  const strategy = new PreReleaseStrategy()
-  const result = strategy.execute('1.0.0-0', 'patch', 'patch')
-  expect(result).toBe('1.0.0-1')
-})
+```ts
+const plan = new TacticalPlan(
+  [new ObjectiveTactic(SubObjective, config, 'someCommand', 'SomeCommand')],
+  'SubObjectivePlan'
+)
 ```
 
-### 4. **Configuration Validation**
-```javascript
-// Strategies are self-documenting
-const validStrategies = VersionBumpStrategyFactory.getAvailableStrategies()
-// Returns: ['do-nothing', 'apply-bump', 'pre-release']
-```
+## Notes on Conventions
 
-## Usage Examples
+- Base strategy shapes are defined as TypeScript interfaces in `src/types/strategies/*`.
+- Strategy implementations expose a `name` and domain-specific commands.
+- Tactics follow `assess(context) → attempt(context)`; results may enrich `context`.
+- Prefer `undefined` over `null` in types; use `null` only when it is semantically distinct.
 
-### Version Bump Strategy Usage:
-```javascript
-const strategy = VersionBumpStrategyFactory.getStrategy('pre-release')
-const nextVersion = strategy.execute('1.0.0', 'patch', 'patch')
-// Returns: '1.1.0-0'
-```
+## Further Reading
 
-### Branch Cleanup Strategy Usage:
-```javascript
-const cleanupStrategy = BranchCleanupStrategyFactory.getStrategy('semantic')
-await cleanupStrategy.execute(branches, versionedBranch, templateRegex, rootBump)
-```
-
-### Reference Point Strategy Usage:
-```javascript
-const strategy = ReferencePointStrategyFactory.getStrategy(baseBranch)
-const { referenceCommit, referenceVersion, shouldFinalizeVersions }
-  = await strategy.execute(baseBranch, activeBranch)
-```
-
-## Future Extension Opportunities
-
-The Strategy pattern implementation makes it easy to add:
-
-1. **New Version Strategies**:
-   - `semver-major-only`: Only allow major version bumps
-   - `calendar-versioning`: Use CalVer instead of SemVer
-   - `git-flow-strategy`: Different logic for different Git flow patterns
-
-2. **New Branch Cleanup Strategies**:
-   - `time-based`: Keep branches newer than X days
-   - `count-based`: Keep only last N version branches
-   - `protection-based`: Keep protected branches only
-
-3. **New Reference Strategies**:
-   - `commit-based`: Use specific commit SHA as reference
-   - `date-based`: Use commits from specific date
-   - `milestone-based`: Use project milestones as reference
-
-4. **New Package Manager Strategies**:
-   - `bun-detection`: Support for Bun package manager
-   - `rush-detection`: Support for Rush monorepo tool
-   - `lerna-detection`: Lerna-specific detection
-
-## Conclusion
-
-The Strategy pattern implementation has transformed the codebase from a procedural, hard-to-extend system into a flexible, object-oriented architecture that follows SOLID principles and is easy to test, maintain, and extend.
-
-**Key Metrics**:
-- **Reduced Complexity**: Eliminated 4 major switch/if-else blocks
-- **Increased Extensibility**: 15+ strategy classes ready for extension
-- **Improved Testability**: Each strategy can be unit tested independently
-- **Better Maintainability**: Changes isolated to specific strategy classes
-
-
+- Strategy/Tactic motivation and design: [Medium: When Your Strategy Needs a Strategy](https://medium.com/gitconnected/when-your-strategy-needs-a-strategy-tactical-error-or-unfinished-business-e42129792032)
