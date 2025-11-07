@@ -1,7 +1,7 @@
 import 'source-map-support/register'
 import * as core from '@actions/core'
 import type { ActionConfiguration } from './types/index.js'
-import { setupGit, pushChanges } from './utils/git.js'
+import { setupGit, pushChanges, interpolateBranchTemplate } from './utils/git.js'
 import { findRootPackage, createWorkspacePackages } from './utils/workspace.js'
 import { GitOperationStrategyFactory } from './strategies/git-operations/factory.js'
 import { PackageManagerFactory } from './strategies/package-managers/factory.js'
@@ -17,6 +17,7 @@ class VersionBumpApplication {
   private exitCode = 0
   private outputBranch: string | undefined
   private tempRef: string | undefined
+  private branchTemplate: string | undefined
   private hasBumped = false
 
   /**
@@ -34,8 +35,8 @@ class VersionBumpApplication {
 
       // Step 2: Setup git and determine branches
       const gitSetup = await setupGit(config.shouldCreateBranch, config.branchTemplate)
-      this.outputBranch = gitSetup.newBranch
       this.tempRef = gitSetup.tempRef
+      this.branchTemplate = gitSetup.branchTemplate
 
       // Step 3: Load root package and initialize services
       const { pkg: rootPkg } = await findRootPackage()
@@ -120,9 +121,25 @@ class VersionBumpApplication {
   private async finalize(): Promise<void> {
     if (this.hasBumped) {
       try {
-        await pushChanges(this.outputBranch)
-        if (this.outputBranch) {
-          core.setOutput('branch', this.outputBranch)
+        // If we have a temp ref, create the proper versioned branch name
+        if (this.tempRef && this.branchTemplate) {
+          // Get the final root package version to create the branch name
+          const { promises: fs } = await import('fs')
+          const rootPkgContent = await fs.readFile('package.json', 'utf-8')
+          const rootPkg = JSON.parse(rootPkgContent)
+          const versionedBranch = interpolateBranchTemplate(this.branchTemplate, {
+            version: rootPkg.version,
+          })
+
+          core.info(`[git] Creating versioned branch: ${versionedBranch}`)
+          await pushChanges(versionedBranch, this.tempRef)
+          core.setOutput('branch', versionedBranch)
+        } else {
+          // Fallback for when no temp ref was created
+          await pushChanges(this.outputBranch)
+          if (this.outputBranch) {
+            core.setOutput('branch', this.outputBranch)
+          }
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)

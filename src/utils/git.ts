@@ -46,7 +46,6 @@ export async function setupGit(
     // Create a unique ref instead of a branch to avoid cleanup issues
     const timestamp = Date.now()
     const refName = `refs/heads/temp-${timestamp}`
-    const displayName = interpolateBranchTemplate(branchTemplate, { version: currentBranch })
 
     core.info(`[git] Creating temporary ref ${refName} from ${currentBranch}`)
 
@@ -59,7 +58,7 @@ export async function setupGit(
       await git.checkout(refName)
       core.debug(`[git] Successfully checked out ${refName}`)
 
-      return { currentBranch, newBranch: displayName, tempRef: refName }
+      return { currentBranch, newBranch: undefined, tempRef: refName, branchTemplate }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       core.error(`[git] Failed to create ref: ${errorMessage}`)
@@ -90,9 +89,15 @@ export async function getCommitsAffecting(dir: string, sinceRef: string): Promis
 /**
  * Push changes to remote repository.
  */
-export async function pushChanges(branch?: string): Promise<void> {
+export async function pushChanges(branch?: string, ref?: string): Promise<void> {
   try {
-    if (branch) {
+    if (branch && ref) {
+      // When we have both branch and ref, push the ref to the branch name
+      core.info(`[git] Pushing ${ref} to origin/${branch}`)
+      await git.push('origin', `${ref}:${branch}`, ['--force'])
+      core.info(`[git] Successfully pushed ${ref} to origin/${branch}`)
+    } else if (branch) {
+      // Fallback for when only branch name is provided
       core.info(`[git] Pushing ${branch} to origin`)
       await git.push('origin', branch, ['--set-upstream', '--force'])
       core.info(`[git] Successfully pushed ${branch}`)
@@ -132,7 +137,7 @@ export async function deleteLocalBranch(branchName: string, force = false): Prom
 /**
  * Simple template interpolation for branch names.
  */
-function interpolateBranchTemplate(template: string, vars: Record<string, string>): string {
+export function interpolateBranchTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\$\{(\w+)\}/g, (match, variableName: string) => {
     const value = vars[variableName]
     return value !== undefined ? String(value) : match

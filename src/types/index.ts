@@ -174,6 +174,7 @@ export interface GitSetupResult {
   readonly currentBranch: string
   readonly newBranch: string | undefined
   readonly tempRef?: string
+  readonly branchTemplate?: string
 }
 
 // Validation interfaces
