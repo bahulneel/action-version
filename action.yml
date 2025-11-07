@@ -10,6 +10,10 @@ inputs:
     description: Commit message template for dependency updates.
     required: false
     default: "chore(deps): update ${depPackage} to ${depVersion} in ${package} (patch)"
+  commit_format:
+    description: "Commit format strategy: 'template' (use templates) or 'conventional' (use conventional commit format)."
+    required: false
+    default: "conventional"
   create_branch:
     description: Create a separate branch for version updates.
     required: false
