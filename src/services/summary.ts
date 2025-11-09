@@ -1,13 +1,15 @@
 import * as core from '@actions/core'
-import type { ActionConfiguration } from '../types/index.js'
+import type { ActionConfiguration } from '@types'
 import type { VersionBumpResults } from './version-bump.js'
-import { SummaryStrategyFactory } from '../strategies/summary/factory.js'
+import { summaryOutput } from '../objectives/index.js'
 
 /**
  * Service responsible for generating comprehensive summaries and reports.
  * Handles GitHub Actions summary creation and output generation.
  */
 export class SummaryService {
+  constructor(private readonly config: ActionConfiguration) {}
+
   /**
    * Generate comprehensive summary for the version bump process.
    */
@@ -15,11 +17,11 @@ export class SummaryService {
     results: VersionBumpResults,
     config: ActionConfiguration
   ): Promise<void> {
-    // Get the appropriate summary strategy based on environment
-    const summaryStrategy = SummaryStrategyFactory.getAppropriateStrategy()
+    // Get the appropriate summary strategy from objective
+    const strategy = summaryOutput.strategise(this.config)
 
     // Generate summary using the strategy
-    await summaryStrategy.generateSummary(results, config)
+    await strategy.generateSummary(results, config)
 
     // Generate additional outputs
     this.logResultsSummary(results, config)

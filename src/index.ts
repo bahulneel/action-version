@@ -1,16 +1,13 @@
 import 'source-map-support/register'
 import * as core from '@actions/core'
-import type { ActionConfiguration, VcsInterface, PackageManager } from './types/index.js'
+import type { ActionConfiguration, StrategyOf, VcsGoals, PackageManagementGoals } from '@types'
 import { findRootPackage, createWorkspacePackages } from './utils/workspace.js'
 import { ConfigurationService } from './services/configuration.js'
 import { VersionBumpService } from './services/version-bump.js'
 import { SummaryService } from './services/summary.js'
 import { SimpleGit } from './adapters/Git/SimpleGit.js'
 import { interpolateTemplate } from './utils/template.js'
-import { access } from 'node:fs/promises'
-import path from 'node:path'
-import { execSync } from 'node:child_process'
-import { Vcs } from './strategies/Vcs.js'
+import { vcsObjective, packageManagement } from './objectives/index.js'
 
 /**
  * Main application class that orchestrates the version bump process.
@@ -37,8 +34,8 @@ class VersionBumpApplication {
         `📋 Configuration loaded: strategy=${config.strategy}, base=${config.baseBranch || 'none'}`
       )
 
-      // Step 2: Setup VCS via strategy (leverages SetupGit tactic)
-      const vcs = Vcs.strategise(config)
+      // Step 2: Setup VCS via objective (delegates to legacy strategy)
+      const vcs = vcsObjective.strategise(config)
       const gitSetup = await vcs.setup({
         shouldCreateBranch: config.shouldCreateBranch,
         branchTemplate: config.branchTemplate,
@@ -48,15 +45,17 @@ class VersionBumpApplication {
 
       // Step 3: Load root package and initialize services
       const { pkg: rootPkg } = await findRootPackage()
-      const packageManager = await this.detectPackageManager()
-      const gitStrategy = vcs as unknown as VcsInterface
+      const packageManager = packageManagement.strategise(
+        config
+      ) as StrategyOf<PackageManagementGoals>
+      const gitStrategy = vcs as StrategyOf<VcsGoals>
 
       core.info(`📦 Package manager: ${packageManager.name}`)
       core.info(`🔧 Git strategy: ${gitStrategy.name}`)
 
       // Step 4: Initialize services
-      const versionBumpService = new VersionBumpService(gitStrategy, packageManager)
-      const summaryService = new SummaryService()
+      const versionBumpService = new VersionBumpService(gitStrategy, packageManager, config)
+      const summaryService = new SummaryService(config)
 
       // Step 5: Discover and process packages
       const packages = await createWorkspacePackages(rootPkg)
@@ -259,56 +258,6 @@ class VersionBumpApplication {
       return false
     }
   }
-
-  // Minimal package manager detection and implementation
-  private async detectPackageManager(): Promise<PackageManager> {
-    const cwd = process.cwd()
-    const exists = async (p: string) => {
-      try {
-        await access(p)
-        return true
-      } catch {
-        return false
-      }
-    }
-
-    type PM = 'pnpm' | 'yarn' | 'npm'
-    let pm: PM = 'npm'
-    if (await exists(path.join(cwd, 'pnpm-lock.yaml'))) pm = 'pnpm'
-    else if (await exists(path.join(cwd, 'yarn.lock'))) pm = 'yarn'
-    else if (await exists(path.join(cwd, 'package-lock.json'))) pm = 'npm'
-
-    const run = (cmd: string, dir: string) =>
-      execSync(cmd, { cwd: dir, stdio: 'pipe', encoding: 'utf-8', timeout: 120_000 })
-
-    const strategy: PackageManager = {
-      name: pm,
-      isAvailable: () => true,
-      async test(packageDir: string) {
-        try {
-          const cmd = pm === 'pnpm' ? 'pnpm test' : pm === 'yarn' ? 'yarn test' : 'npm test'
-          run(cmd, packageDir)
-          return { success: true }
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e)
-          return { success: false, error: msg }
-        }
-      },
-      async install(packageDir: string) {
-        const cmd =
-          pm === 'pnpm'
-            ? 'pnpm install --frozen-lockfile'
-            : pm === 'yarn'
-            ? 'yarn install --frozen-lockfile'
-            : 'npm ci'
-        execSync(cmd, { cwd: packageDir, stdio: 'inherit', timeout: 300_000 })
-      },
-    }
-    core.info(`📦 Package manager: ${strategy.name}`)
-    return strategy
-  }
-
-  // (unused) legacy git operation strategy left intentionally removed
 }
 
 /**

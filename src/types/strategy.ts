@@ -3,7 +3,5 @@ export interface Strategy {
   readonly description?: string
 }
 
-export interface StrategyFactory<T> {
-  getStrategy(name: string): T
-  getAvailableStrategies(): readonly string[]
-}
+// Helper type for strategies that satisfy a Goals interface
+export type StrategyOf<Goals> = { name: string } & Goals

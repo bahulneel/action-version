@@ -53,7 +53,7 @@ export class SimpleGit implements Git {
 
   async tags(options: string[] = []): Promise<{ latest: string | null }> {
     const result = await this.git.tags(options)
-    return { latest: result.latest }
+    return { latest: result.latest ?? null }
   }
 
   // Reference operations

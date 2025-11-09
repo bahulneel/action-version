@@ -1,8 +1,6 @@
 import * as core from '@actions/core'
 import type { ActionConfiguration } from '../types/index.js'
 import { validateConfiguration } from '../utils/validation.js'
-import { VersionBumpStrategyFactory } from '../strategies/version-bump/factory.js'
-import { BranchCleanupStrategyFactory } from '../strategies/branch-cleanup/factory.js'
 
 /**
  * Service responsible for parsing and validating action configuration.
@@ -115,7 +113,7 @@ export class ConfigurationService {
    */
   private validateStrategyCompatibility(config: ActionConfiguration): void {
     // Check version bump strategy availability
-    const availableStrategies = VersionBumpStrategyFactory.getAvailableStrategies()
+    const availableStrategies = ['do-nothing', 'apply-bump', 'pre-release'] as const
     if (!availableStrategies.includes(config.strategy)) {
       throw new Error(
         `Invalid strategy: ${config.strategy}. Available: ${availableStrategies.join(', ')}`
@@ -123,7 +121,7 @@ export class ConfigurationService {
     }
 
     // Check branch cleanup strategy availability
-    const availableCleanupStrategies = BranchCleanupStrategyFactory.getAvailableStrategies()
+    const availableCleanupStrategies = ['keep', 'prune', 'semantic'] as const
     if (!availableCleanupStrategies.includes(config.branchCleanup)) {
       throw new Error(
         `Invalid branch cleanup strategy: ${

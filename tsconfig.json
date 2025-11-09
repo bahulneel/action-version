@@ -25,15 +25,17 @@
     "allowUnreachableCode": false,
     "resolveJsonModule": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "baseUrl": "./src",
+    "paths": {
+      "@types": ["./types/index.js"],
+      "@types/*": ["./types/*.js"],
+      "@adapters/*": ["./adapters/*"],
+      "@utils/*": ["./utils/*"],
+      "@domain/*": ["./domain/*"],
+      "~/*": ["./*"]
+    }
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "lib",
-    "*.cjs"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "lib", "*.cjs"]
 }

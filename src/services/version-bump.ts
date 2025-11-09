@@ -6,14 +6,14 @@ import type {
   PackageJson,
   BumpResult,
   ReferencePointResult,
-  VcsInterface,
-  PackageManager,
-} from '../types/index.js'
+  CommitInfo,
+  StrategyOf,
+} from '@types'
 import { Package } from '../domain/package.js'
 import { DiscoveryService } from './discovery.js'
 import { calculateBumpType, finalizeVersion } from '../utils/version.js'
 import { getMostSignificantBumpType } from '../utils/version.js'
-import { VersionBumpStrategyFactory } from '../strategies/version-bump/factory.js'
+import { versioning } from '../objectives/index.js'
 import { BumpType } from '../types/index.js'
 
 export interface VersionBumpResults {
@@ -34,10 +34,11 @@ export class VersionBumpService {
   private readonly discoveryService: DiscoveryService
 
   constructor(
-    private readonly gitStrategy: VcsInterface,
-    private readonly packageManager: PackageManager
+    private readonly gitStrategy: StrategyOf<import('@types').VcsGoals>,
+    private readonly packageManager: StrategyOf<import('@types').PackageManagementGoals>,
+    private readonly config: ActionConfiguration
   ) {
-    this.discoveryService = new DiscoveryService()
+    this.discoveryService = new DiscoveryService(config)
   }
 
   /**
@@ -278,8 +279,8 @@ export class VersionBumpService {
     )
 
     // Apply version bump using the most significant change
-    const strategy = VersionBumpStrategyFactory.getStrategy(config.strategy)
-    const nextVersion = strategy.execute(rootPkg.version, mostSignificantBump, historicalBump)
+    const strategy = versioning.strategise(config)
+    const nextVersion = strategy.bumpVersion(rootPkg.version, mostSignificantBump, historicalBump)
 
     if (!nextVersion || nextVersion === rootPkg.version) {
       core.info('🏠 No root package version change needed')
@@ -326,8 +327,10 @@ export class VersionBumpService {
       const log = await git.log(logArgs)
 
       // Parse commits to get bump types
-      const { parseCommits, getMostSignificantBump } = await import('../utils/commits.js')
-      const commits = parseCommits([...log.all], referenceCommit)
+      const { getMostSignificantBump } = await import('../utils/commits.js')
+      const { commitMessaging } = await import('../objectives/index.js')
+      const messaging = commitMessaging.strategise(this.config)
+      const commits = await messaging.parseCommits([...log.all], referenceCommit)
 
       // Filter out commits that only affect workspace packages
       const workspaceDirs = await this.getWorkspaceDirectories()
@@ -343,7 +346,9 @@ export class VersionBumpService {
 
         if (hasNonWorkspaceChanges) {
           // Get bump type for this commit
-          const commitInfo = commits.find((c) => c.header === commit.message.split('\n')[0])
+          const commitInfo = commits.find(
+            (c: CommitInfo) => c.header === commit.message.split('\n')[0]
+          )
           if (commitInfo) {
             const bumpType = getMostSignificantBump([commitInfo])
             if (bumpType) {

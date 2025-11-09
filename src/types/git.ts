@@ -8,9 +8,12 @@ export interface GitBranches {
   readonly current: string
 }
 
+export interface GitSetupContext {
+  shouldCreateBranch: boolean
+  branchTemplate: string
+}
+
 export interface GitSetupResult {
-  readonly currentBranch: string
-  readonly newBranch: string | undefined
   readonly tempRef?: string
   readonly branchTemplate?: string
 }

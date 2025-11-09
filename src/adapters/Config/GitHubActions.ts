@@ -1,11 +1,11 @@
 import * as core from '@actions/core'
-import type { Config } from '../../types/index.js'
+import type { ConfigAdapter } from '../../types/config.js'
 
 /**
  * GitHub Actions config adapter implementation.
  * Reads configuration from GitHub Actions inputs.
  */
-export class GitHubActions implements Config {
+export class GitHubActions implements ConfigAdapter {
   readString(key: string): string | undefined {
     const value = core.getInput(key)
     return value || undefined
