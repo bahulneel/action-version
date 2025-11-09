@@ -1,10 +1,12 @@
-import type { ActionConfiguration } from '../types/index.js';
+import type { ActionConfiguration } from '@types';
 import type { VersionBumpResults } from './version-bump.js';
 /**
  * Service responsible for generating comprehensive summaries and reports.
  * Handles GitHub Actions summary creation and output generation.
  */
 export declare class SummaryService {
+    private readonly config;
+    constructor(config: ActionConfiguration);
     /**
      * Generate comprehensive summary for the version bump process.
      */

@@ -1,33 +1,19 @@
-import type { ReferencePointResult } from '../types/index.js';
+import type { ReferencePointResult, ActionConfiguration } from '@types';
 /**
  * Service responsible for discovering git reference points and version information.
- * Handles tag-based and branch-based reference point strategies.
+ * Uses the ReferenceDiscovery objective to select appropriate strategy.
  */
 export declare class DiscoveryService {
+    private readonly config;
+    constructor(config: ActionConfiguration);
     /**
      * Determine the reference point for version comparison.
      */
     determineReferencePoint(baseBranch: string | undefined, activeBranch: string): Promise<ReferencePointResult>;
     /**
-     * Find reference point based on branch comparison using tactical system.
-     */
-    private findBranchBasedReference;
-    /**
-     * Find reference point based on latest git tag.
-     */
-    private findTagBasedReference;
-    /**
-     * Get the current branch name.
-     */
-    private getCurrentBranch;
-    /**
      * Get package version at a specific commit.
      */
     getVersionAtCommit(commitRef: string): Promise<string | null>;
-    /**
-     * Find the initial commit of the repository.
-     */
-    private findInitialCommit;
     /**
      * Find the last version change commit for a specific package.
      */

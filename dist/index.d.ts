@@ -7,7 +7,9 @@ declare class VersionBumpApplication {
     private exitCode;
     private outputBranch;
     private tempRef;
+    private branchTemplate;
     private hasBumped;
+    private readonly git;
     /**
      * Run the complete version bump process.
      */

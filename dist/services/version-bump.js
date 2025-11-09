@@ -40,7 +40,7 @@ const fs_1 = require("fs");
 const discovery_js_1 = require("./discovery.js");
 const version_js_1 = require("../utils/version.js");
 const version_js_2 = require("../utils/version.js");
-const factory_js_1 = require("../strategies/version-bump/factory.js");
+const index_js_1 = require("../objectives/index.js");
 /**
  * Service responsible for orchestrating the complete version bump process.
  * Handles package discovery, version calculation, and dependency updates.
@@ -48,11 +48,13 @@ const factory_js_1 = require("../strategies/version-bump/factory.js");
 class VersionBumpService {
     gitStrategy;
     packageManager;
+    config;
     discoveryService;
-    constructor(gitStrategy, packageManager) {
+    constructor(gitStrategy, packageManager, config) {
         this.gitStrategy = gitStrategy;
         this.packageManager = packageManager;
-        this.discoveryService = new discovery_js_1.DiscoveryService();
+        this.config = config;
+        this.discoveryService = new discovery_js_1.DiscoveryService(config);
     }
     /**
      * Process the entire workspace for version bumps.
@@ -198,8 +200,8 @@ class VersionBumpService {
         const historicalBump = (0, version_js_1.calculateBumpType)(referencePoint.referenceVersion, rootPkg.version);
         core.info(`🏠 Workspace bump: ${workspaceBump || 'none'}, Non-workspace bump: ${nonWorkspaceBump || 'none'}, Combined: ${mostSignificantBump}, Historical: ${historicalBump || 'none'}`);
         // Apply version bump using the most significant change
-        const strategy = factory_js_1.VersionBumpStrategyFactory.getStrategy(config.strategy);
-        const nextVersion = strategy.execute(rootPkg.version, mostSignificantBump, historicalBump);
+        const strategy = index_js_1.versioning.strategise(config);
+        const nextVersion = strategy.bumpVersion(rootPkg.version, mostSignificantBump, historicalBump);
         if (!nextVersion || nextVersion === rootPkg.version) {
             core.info('🏠 No root package version change needed');
             return { bumped: {}, hasBumped: false };
@@ -231,8 +233,10 @@ class VersionBumpService {
             const logArgs = referenceCommit ? [`${referenceCommit}..HEAD`] : ['--all'];
             const log = await git.log(logArgs);
             // Parse commits to get bump types
-            const { parseCommits, getMostSignificantBump } = await Promise.resolve().then(() => __importStar(require('../utils/commits.js')));
-            const commits = parseCommits([...log.all], referenceCommit);
+            const { getMostSignificantBump } = await Promise.resolve().then(() => __importStar(require('../utils/commits.js')));
+            const { commitMessaging } = await Promise.resolve().then(() => __importStar(require('../objectives/index.js')));
+            const messaging = commitMessaging.strategise(this.config);
+            const commits = await messaging.parseCommits([...log.all], referenceCommit);
             // Filter out commits that only affect workspace packages
             const workspaceDirs = await this.getWorkspaceDirectories();
             const nonWorkspaceBumpTypes = [];

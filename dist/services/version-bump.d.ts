@@ -1,4 +1,4 @@
-import type { ActionConfiguration, PackageJson, GitOperationStrategy, PackageManagerStrategy, BumpResult } from '../types/index.js';
+import type { ActionConfiguration, PackageJson, BumpResult, StrategyOf } from '@types';
 import { Package } from '../domain/package.js';
 export interface VersionBumpResults {
     bumped: Record<string, BumpResult>;
@@ -16,8 +16,9 @@ export interface VersionBumpResults {
 export declare class VersionBumpService {
     private readonly gitStrategy;
     private readonly packageManager;
+    private readonly config;
     private readonly discoveryService;
-    constructor(gitStrategy: GitOperationStrategy, packageManager: PackageManagerStrategy);
+    constructor(gitStrategy: StrategyOf<import('@types').VcsGoals>, packageManager: StrategyOf<import('@types').PackageManagementGoals>, config: ActionConfiguration);
     /**
      * Process the entire workspace for version bumps.
      */

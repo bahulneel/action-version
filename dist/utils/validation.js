@@ -5,7 +5,7 @@ exports.validateConfiguration = validateConfiguration;
 exports.isNonEmptyString = isNonEmptyString;
 exports.isValidRegExp = isValidRegExp;
 exports.validateArray = validateArray;
-const index_js_1 = require("../types/index.js");
+const guards_js_1 = require("../utils/guards.js");
 /**
  * Custom validation error class.
  */
@@ -26,11 +26,11 @@ exports.ConfigurationValidationError = ConfigurationValidationError;
 function validateConfiguration(config) {
     const errors = [];
     // Validate strategy
-    if (config.strategy && !(0, index_js_1.isStrategyName)(config.strategy)) {
+    if (config.strategy && !(0, guards_js_1.isStrategyName)(config.strategy)) {
         errors.push(new ConfigurationValidationError(`Invalid strategy: ${config.strategy}. Must be one of: do-nothing, apply-bump, pre-release`, 'strategy', config.strategy));
     }
     // Validate branch cleanup strategy
-    if (config.branchCleanup && !(0, index_js_1.isBranchCleanupStrategy)(config.branchCleanup)) {
+    if (config.branchCleanup && !(0, guards_js_1.isBranchCleanupStrategy)(config.branchCleanup)) {
         errors.push(new ConfigurationValidationError(`Invalid branch cleanup strategy: ${config.branchCleanup}. Must be one of: keep, prune, semantic`, 'branchCleanup', config.branchCleanup));
     }
     // Validate branch names

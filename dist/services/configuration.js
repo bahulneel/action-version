@@ -36,8 +36,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ConfigurationService = void 0;
 const core = __importStar(require("@actions/core"));
 const validation_js_1 = require("../utils/validation.js");
-const factory_js_1 = require("../strategies/version-bump/factory.js");
-const factory_js_2 = require("../strategies/branch-cleanup/factory.js");
 /**
  * Service responsible for parsing and validating action configuration.
  * Handles GitHub Actions inputs and provides validated configuration objects.
@@ -141,12 +139,12 @@ class ConfigurationService {
      */
     validateStrategyCompatibility(config) {
         // Check version bump strategy availability
-        const availableStrategies = factory_js_1.VersionBumpStrategyFactory.getAvailableStrategies();
+        const availableStrategies = ['do-nothing', 'apply-bump', 'pre-release'];
         if (!availableStrategies.includes(config.strategy)) {
             throw new Error(`Invalid strategy: ${config.strategy}. Available: ${availableStrategies.join(', ')}`);
         }
         // Check branch cleanup strategy availability
-        const availableCleanupStrategies = factory_js_2.BranchCleanupStrategyFactory.getAvailableStrategies();
+        const availableCleanupStrategies = ['keep', 'prune', 'semantic'];
         if (!availableCleanupStrategies.includes(config.branchCleanup)) {
             throw new Error(`Invalid branch cleanup strategy: ${config.branchCleanup}. Available: ${availableCleanupStrategies.join(', ')}`);
         }

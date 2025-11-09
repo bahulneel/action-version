@@ -40,7 +40,7 @@ exports.Package = void 0;
 const core = __importStar(require("@actions/core"));
 const promises_1 = require("node:fs/promises");
 const node_path_1 = __importDefault(require("node:path"));
-const index_js_1 = require("../types/index.js");
+const constants_js_1 = require("../constants.js");
 const version_js_1 = require("../utils/version.js");
 const versioning_js_1 = require("../utils/versioning.js");
 const git_js_1 = require("../utils/git.js");
@@ -120,9 +120,7 @@ class Package {
         core.info(`[${this.name}@${this.version}] Processing package`);
         // Find changes since reference point
         const commitsSinceReference = await this.getCommitsAffecting(referenceCommit);
-        const commitBasedBump = commitsSinceReference.length > 0
-            ? (0, commits_js_1.getMostSignificantBump)(commitsSinceReference)
-            : null;
+        const commitBasedBump = commitsSinceReference.length > 0 ? (0, commits_js_1.getMostSignificantBump)(commitsSinceReference) : null;
         // Calculate historical bump type from reference
         const historicalVersion = referenceVersion;
         const historicalBump = this.calculateBumpType(historicalVersion, this.version);
@@ -164,7 +162,7 @@ class Package {
         const result = {
             version: finalVersion,
             bumpType: 'release',
-            sha: null
+            sha: null,
         };
         this._bumpResult = result;
         return result;
@@ -174,7 +172,7 @@ class Package {
      */
     async updateDependency(depName, newVersion, depCommitMsgTemplate, gitStrategy) {
         let updated = false;
-        for (const depKey of index_js_1.DEPENDENCY_KEYS) {
+        for (const depKey of constants_js_1.DEPENDENCY_KEYS) {
             const deps = this._pkg[depKey];
             if (deps && deps[depName]) {
                 const currentDepSpec = deps[depName];

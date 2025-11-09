@@ -33,108 +33,72 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.guessBumpType = guessBumpType;
-exports.initializeVersion = initializeVersion;
 exports.calculateBumpType = calculateBumpType;
 exports.finalizeVersion = finalizeVersion;
-exports.bumpPriority = bumpPriority;
 exports.getMostSignificantBumpType = getMostSignificantBumpType;
+exports.initializeVersion = initializeVersion;
 const semver = __importStar(require("semver"));
 /**
- * Guess the bump type based on version string patterns.
- * @param version - The version string to analyze
- * @returns The guessed bump type
- */
-function guessBumpType(version) {
-    if (version.endsWith('.0.0')) {
-        return 'major';
-    }
-    if (version.endsWith('.0')) {
-        return 'minor';
-    }
-    return 'patch';
-}
-/**
- * Initialize a version if it's missing or invalid.
- * @param version - The version to initialize
- * @returns A valid version string
- */
-function initializeVersion(version) {
-    return semver.coerce(version)?.toString() ?? '0.0.0';
-}
-/**
  * Calculate the bump type between two versions.
- * @param fromVersion - The starting version
- * @param toVersion - The target version
- * @returns The bump type or null if no change
  */
 function calculateBumpType(fromVersion, toVersion) {
     const from = semver.coerce(fromVersion)?.toString() ?? '0.0.0';
     const to = semver.coerce(toVersion)?.toString() ?? '0.0.0';
-    const diff = semver.diff(from, to);
-    if (!diff) {
+    if (semver.eq(from, to))
         return null;
-    }
-    // Map semver.diff results to our BumpType
-    switch (diff) {
-        case 'major':
-        case 'minor':
-        case 'patch':
-            return diff;
-        case 'prerelease':
-        case 'prepatch':
-        case 'preminor':
-        case 'premajor':
-            return 'prerelease';
-        default:
-            return null;
-    }
+    const diff = semver.diff(from, to);
+    if (!diff)
+        return null;
+    if (diff.includes('major'))
+        return 'major';
+    if (diff.includes('minor'))
+        return 'minor';
+    if (diff.includes('patch'))
+        return 'patch';
+    if (diff.includes('prerelease'))
+        return 'prerelease';
+    return null;
 }
 /**
  * Finalize a prerelease version by removing the prerelease suffix.
- * @param version - The prerelease version to finalize
- * @returns The finalized version
  */
 function finalizeVersion(version) {
-    const current = semver.coerce(version)?.toString() ?? '0.0.0';
-    if (semver.prerelease(current)) {
-        const parsed = semver.parse(current);
-        if (parsed) {
-            return `${parsed.major}.${parsed.minor}.${parsed.patch}`;
-        }
+    const parsed = semver.parse(version);
+    if (!parsed)
+        return version;
+    if (parsed.prerelease.length > 0) {
+        return `${parsed.major}.${parsed.minor}.${parsed.patch}`;
     }
-    return current;
-}
-/**
- * Get the priority of a bump type for comparison.
- * @param bumpType - The bump type to get priority for
- * @returns Numeric priority (higher = more significant)
- */
-function bumpPriority(bumpType) {
-    switch (bumpType) {
-        case 'major':
-            return 3;
-        case 'minor':
-            return 2;
-        case 'patch':
-            return 1;
-        case 'prerelease':
-        case 'release':
-            return 0;
-        case null:
-            return -1;
-        default:
-            return -1;
-    }
+    return version;
 }
 /**
  * Get the most significant bump type from an array of bump types.
- * @param bumpTypes - Array of bump types to compare
- * @returns The most significant bump type
  */
 function getMostSignificantBumpType(bumpTypes) {
-    return bumpTypes.reduce((most, current) => {
-        return bumpPriority(current) > bumpPriority(most) ? current : most;
-    }, null);
+    const priority = {
+        major: 4,
+        minor: 3,
+        patch: 2,
+        prerelease: 1,
+        release: 0,
+    };
+    let mostSignificant = null;
+    let highestPriority = -1;
+    for (const bumpType of bumpTypes) {
+        if (bumpType && priority[bumpType] > highestPriority) {
+            mostSignificant = bumpType;
+            highestPriority = priority[bumpType];
+        }
+    }
+    return mostSignificant;
+}
+/**
+ * Initialize a version if it's missing or invalid.
+ */
+function initializeVersion(version) {
+    if (!version)
+        return '0.0.0';
+    const coerced = semver.coerce(version);
+    return coerced?.toString() ?? '0.0.0';
 }
 //# sourceMappingURL=version.js.map

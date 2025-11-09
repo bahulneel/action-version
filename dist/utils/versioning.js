@@ -34,96 +34,30 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getNextVersion = getNextVersion;
-exports.validateVersion = validateVersion;
-exports.compareVersions = compareVersions;
-exports.satisfiesRange = satisfiesRange;
-exports.parseVersionComponents = parseVersionComponents;
-exports.cleanVersion = cleanVersion;
-exports.isPrerelease = isPrerelease;
-exports.getReleaseVersion = getReleaseVersion;
-const core = __importStar(require("@actions/core"));
 const semver = __importStar(require("semver"));
-const factory_js_1 = require("../strategies/version-bump/factory.js");
 /**
- * Get the next version based on current version, bump types, and strategy.
+ * Get the next version based on current version, bump type, and strategy.
  */
-function getNextVersion(currentVersion, commitBasedBump, historicalBump, strategyName = 'do-nothing') {
+function getNextVersion(currentVersion, commitBasedBump, _historicalBump, strategy) {
     const current = semver.coerce(currentVersion)?.toString() ?? '0.0.0';
-    // Validate inputs
-    if (commitBasedBump && !['major', 'minor', 'patch'].includes(commitBasedBump)) {
-        throw new Error(`Invalid commitBasedBump: ${commitBasedBump}`);
-    }
-    if (commitBasedBump === historicalBump) {
-        // Same bump type - use configured strategy
-        core.debug(`Same bump type detected (${commitBasedBump}), using strategy: ${strategyName}`);
-        const strategy = factory_js_1.VersionBumpStrategyFactory.getStrategy(strategyName);
-        const nextVersion = strategy.execute(currentVersion, commitBasedBump, historicalBump);
-        // Handle do-nothing strategy return value
-        if (nextVersion === null && strategyName === 'do-nothing') {
-            return null; // Skip bump
-        }
-        return nextVersion;
-    }
-    else if (commitBasedBump) {
-        // Different bump type - normal semver bump (always apply)
-        const nextVersion = semver.inc(current, commitBasedBump);
-        core.debug(`Different bump type: ${current} → ${nextVersion} (${commitBasedBump})`);
-        return nextVersion;
-    }
-    return null; // No bump needed
-}
-/**
- * Validate version string using semver.
- */
-function validateVersion(version) {
-    return semver.valid(version) !== null;
-}
-/**
- * Compare two versions and return the relationship.
- */
-function compareVersions(version1, version2) {
-    return semver.compare(version1, version2);
-}
-/**
- * Check if a version satisfies a range specification.
- */
-function satisfiesRange(version, range) {
-    return semver.satisfies(version, range);
-}
-/**
- * Get the major, minor, and patch components of a version.
- */
-function parseVersionComponents(version) {
-    const parsed = semver.parse(version);
-    if (!parsed)
+    // Handle do-nothing strategy
+    if (strategy === 'do-nothing') {
         return null;
-    return {
-        major: parsed.major,
-        minor: parsed.minor,
-        patch: parsed.patch,
-        prerelease: parsed.prerelease.map(String),
-    };
-}
-/**
- * Create a clean version string from any input.
- */
-function cleanVersion(version) {
-    return semver.clean(version) ?? '0.0.0';
-}
-/**
- * Check if a version is a prerelease.
- */
-function isPrerelease(version) {
-    const parsed = semver.parse(version);
-    return Boolean(parsed?.prerelease.length);
-}
-/**
- * Get the release version from a prerelease version.
- */
-function getReleaseVersion(version) {
-    const parsed = semver.parse(version);
-    if (!parsed)
-        return version;
-    return `${parsed.major}.${parsed.minor}.${parsed.patch}`;
+    }
+    // Handle pre-release strategy
+    if (strategy === 'pre-release' && commitBasedBump && ['major', 'minor', 'patch'].includes(commitBasedBump)) {
+        if (semver.prerelease(current)) {
+            return semver.inc(current, 'prerelease');
+        }
+        else {
+            const bumped = semver.inc(current, commitBasedBump);
+            return bumped ? `${bumped}-1` : null;
+        }
+    }
+    // Handle apply-bump strategy
+    if (commitBasedBump && ['major', 'minor', 'patch'].includes(commitBasedBump)) {
+        return semver.inc(current, commitBasedBump);
+    }
+    return null;
 }
 //# sourceMappingURL=versioning.js.map

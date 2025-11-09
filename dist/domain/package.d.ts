@@ -1,4 +1,4 @@
-import type { PackageJson, BumpResult, StrategyName, GitOperationStrategy, PackageManagerStrategy, TestResult } from '../types/index.js';
+import type { PackageJson, BumpResult, StrategyName, TestResult, VcsInterface, PackageManager } from '../types/index.js';
 /**
  * Represents a package in the workspace with its metadata and operations.
  * Encapsulates package-specific version management logic.
@@ -45,19 +45,19 @@ export declare class Package {
     /**
      * Process version bump for this package based on conventional commits.
      */
-    processVersionBump(referenceCommit: string, referenceVersion: string, strategy: StrategyName, commitMsgTemplate: string, gitStrategy: GitOperationStrategy, shouldForceBump?: boolean): Promise<BumpResult | null>;
+    processVersionBump(referenceCommit: string, referenceVersion: string, strategy: StrategyName, commitMsgTemplate: string, gitStrategy: VcsInterface, shouldForceBump?: boolean): Promise<BumpResult | null>;
     /**
      * Finalize a prerelease version to a stable release.
      */
-    finalizePrerelease(commitMsgTemplate: string, gitStrategy: GitOperationStrategy): Promise<BumpResult | null>;
+    finalizePrerelease(commitMsgTemplate: string, gitStrategy: VcsInterface): Promise<BumpResult | null>;
     /**
      * Update a dependency to a new version.
      */
-    updateDependency(depName: string, newVersion: string, depCommitMsgTemplate: string, gitStrategy: GitOperationStrategy): Promise<boolean>;
+    updateDependency(depName: string, newVersion: string, depCommitMsgTemplate: string, gitStrategy: VcsInterface): Promise<boolean>;
     /**
      * Test compatibility after dependency updates.
      */
-    testCompatibility(packageManager: PackageManagerStrategy): Promise<TestResult>;
+    testCompatibility(packageManager: PackageManager): Promise<TestResult>;
     private performVersionBump;
     private isPrerelease;
     private finalizeVersion;

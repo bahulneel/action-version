@@ -39,115 +39,24 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.DiscoveryService = void 0;
 const core = __importStar(require("@actions/core"));
 const simple_git_1 = __importDefault(require("simple-git"));
-const tactics_js_1 = require("../strategies/reference-discovery/tactics.js");
+const index_js_1 = require("../objectives/index.js");
 const git = (0, simple_git_1.default)();
 /**
  * Service responsible for discovering git reference points and version information.
- * Handles tag-based and branch-based reference point strategies.
+ * Uses the ReferenceDiscovery objective to select appropriate strategy.
  */
 class DiscoveryService {
+    config;
+    constructor(config) {
+        this.config = config;
+    }
     /**
      * Determine the reference point for version comparison.
      */
     async determineReferencePoint(baseBranch, activeBranch) {
-        if (baseBranch) {
-            return await this.findBranchBasedReference(baseBranch, activeBranch);
-        }
-        else {
-            return await this.findTagBasedReference();
-        }
-    }
-    /**
-     * Find reference point based on branch comparison using tactical system.
-     */
-    async findBranchBasedReference(baseBranch, activeBranch) {
-        core.info(`🔍 Using branch-based reference: ${baseBranch}`);
-        // Get current branch for context
-        const currentBranch = await this.getCurrentBranch();
-        // Build context for tactics
-        const context = {
-            baseBranch,
-            activeBranch,
-            currentBranch,
-            packageJsonPath: 'package.json',
-        };
-        // Execute branch-based tactical plan
-        const tacticalPlan = tactics_js_1.ReferenceDiscoveryTactics.branchBased();
-        try {
-            const result = await tacticalPlan.execute(context);
-            core.info(`🎯 Reference: commit=${result.referenceCommit.substring(0, 8)}, version=${result.referenceVersion}, finalize=${result.shouldFinalizeVersions}`);
-            return result;
-        }
-        catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            core.error(`❌ Version bump failed: ${errorMessage}`);
-            throw new Error(errorMessage);
-        }
-    }
-    /**
-     * Find reference point based on latest git tag.
-     */
-    async findTagBasedReference() {
-        core.info('🔍 Using tag-based reference');
-        try {
-            // First ensure we have all tags
-            try {
-                await git.fetch(['--tags']);
-                core.debug('Fetched all tags from remote');
-            }
-            catch (fetchError) {
-                core.warning(`Failed to fetch tags: ${fetchError}`);
-            }
-            // Get latest tag
-            const tags = await git.tags(['--sort=-v:refname']);
-            const latestTag = tags.latest;
-            // Debug: Log all available tags
-            core.debug(`All tags found: ${tags.all.join(', ')}`);
-            core.debug(`Latest tag: ${latestTag || 'none'}`);
-            if (latestTag) {
-                const referenceCommit = await git.revparse([latestTag]);
-                const referenceVersion = latestTag.replace(/^v/, ''); // Remove 'v' prefix if present
-                if (!referenceCommit || !referenceCommit.trim()) {
-                    throw new Error(`Failed to resolve commit for tag ${latestTag}`);
-                }
-                core.info(`Tag reference: tag=${latestTag}, commit=${referenceCommit.trim()}, version=${referenceVersion}`);
-                return {
-                    referenceCommit: referenceCommit.trim(),
-                    referenceVersion,
-                    shouldFinalizeVersions: false,
-                    shouldForceBump: false,
-                };
-            }
-            else {
-                // No tags found, use initial commit
-                core.info('📦 No tags found, using initial commit as reference');
-                const referenceCommit = await this.findInitialCommit();
-                return {
-                    referenceCommit,
-                    referenceVersion: '0.0.0',
-                    shouldFinalizeVersions: false,
-                    shouldForceBump: true, // Force bump from initial state
-                };
-            }
-        }
-        catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            core.error(`Failed to find tag-based reference: ${errorMessage}`);
-            throw new Error(`Reference point discovery failed: ${errorMessage}`);
-        }
-    }
-    /**
-     * Get the current branch name.
-     */
-    async getCurrentBranch() {
-        try {
-            const branch = await git.branch();
-            return branch.current;
-        }
-        catch (error) {
-            // Fallback to environment variables
-            return process.env?.GITHUB_HEAD_REF || process.env?.GITHUB_REF_NAME || 'main';
-        }
+        // Use the ReferenceDiscovery objective
+        const strategy = index_js_1.referenceDiscovery.strategise(this.config);
+        return await strategy.findReferencePoint(baseBranch, activeBranch);
     }
     /**
      * Get package version at a specific commit.
@@ -161,23 +70,6 @@ class DiscoveryService {
         catch (error) {
             core.debug(`Failed to get version at commit ${commitRef}: ${error}`);
             return null;
-        }
-    }
-    /**
-     * Find the initial commit of the repository.
-     */
-    async findInitialCommit() {
-        try {
-            const log = await git.log({ maxCount: 1000 });
-            const commits = log.all;
-            if (commits.length > 0) {
-                return commits[commits.length - 1].hash;
-            }
-            return 'HEAD';
-        }
-        catch (error) {
-            core.warning('Failed to find initial commit, using HEAD');
-            return 'HEAD';
         }
     }
     /**

@@ -35,20 +35,24 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SummaryService = void 0;
 const core = __importStar(require("@actions/core"));
-const factory_js_1 = require("../strategies/summary/factory.js");
+const index_js_1 = require("../objectives/index.js");
 /**
  * Service responsible for generating comprehensive summaries and reports.
  * Handles GitHub Actions summary creation and output generation.
  */
 class SummaryService {
+    config;
+    constructor(config) {
+        this.config = config;
+    }
     /**
      * Generate comprehensive summary for the version bump process.
      */
     async generateSummary(results, config) {
-        // Get the appropriate summary strategy based on environment
-        const summaryStrategy = factory_js_1.SummaryStrategyFactory.getAppropriateStrategy();
+        // Get the appropriate summary strategy from objective
+        const strategy = index_js_1.summaryOutput.strategise(this.config);
         // Generate summary using the strategy
-        await summaryStrategy.generateSummary(results, config);
+        await strategy.generateSummary(results, config);
         // Generate additional outputs
         this.logResultsSummary(results, config);
         this.generateNotices(results, config);
