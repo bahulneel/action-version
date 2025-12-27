@@ -1,6 +1,7 @@
 import type { Objective, SummaryOutputGoals, ActionConfiguration, StrategyOf } from '@types'
 import { GitHubActions } from './strategies/GitHubActions.js'
 import { Console } from './strategies/Console.js'
+import { GitHubActionsLogger, ConsoleLogger } from '../../adapters/Logging/index.js'
 
 export const summaryOutput: Objective<ActionConfiguration, SummaryOutputGoals> = {
   strategise(_config): StrategyOf<SummaryOutputGoals> {
@@ -11,9 +12,11 @@ export const summaryOutput: Objective<ActionConfiguration, SummaryOutputGoals> =
     }
 
     if (summaryConfig.kind === 'github-actions') {
-      return new GitHubActions(summaryConfig)
+      const logger = new GitHubActionsLogger()
+      return new GitHubActions(summaryConfig, logger)
     } else {
-      return new Console(summaryConfig)
+      const logger = new ConsoleLogger()
+      return new Console(summaryConfig, logger)
     }
   },
 }

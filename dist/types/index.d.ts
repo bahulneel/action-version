@@ -6,6 +6,7 @@ export type * from './config.js';
 export type * from './strategy.js';
 export type * from './tactics.js';
 export type * from './goals/versioning.js';
+export type * from './goals/version-bumping.js';
 export type * from './goals/reference.js';
 export type * from './goals/vcs.js';
 export type * from './goals/commit.js';

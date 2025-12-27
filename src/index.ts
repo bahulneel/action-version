@@ -1,11 +1,14 @@
 import 'source-map-support/register'
 import * as core from '@actions/core'
+import { promises as fs } from 'fs'
+import semver from 'semver'
 import type { ActionConfiguration, StrategyOf, VcsGoals, PackageManagementGoals } from '@types'
 import { findRootPackage, createWorkspacePackages } from './utils/workspace.js'
 import { ConfigurationService } from './services/configuration.js'
 import { VersionBumpService } from './services/version-bump.js'
 import { SummaryService } from './services/summary.js'
 import { SimpleGit } from './adapters/Git/SimpleGit.js'
+import { GitHubActions as GitHubActionsConfigAdapter } from './adapters/Config/GitHubActions.js'
 import { interpolateTemplate } from './utils/template.js'
 import { vcsObjective, packageManagement } from './objectives/index.js'
 
@@ -108,7 +111,8 @@ class VersionBumpApplication {
    * Parse and validate action configuration from inputs.
    */
   private async parseConfiguration(): Promise<ActionConfiguration> {
-    const configService = new ConfigurationService()
+    const configAdapter = new GitHubActionsConfigAdapter()
+    const configService = new ConfigurationService(configAdapter)
     return await configService.parseConfiguration()
   }
 
@@ -131,7 +135,6 @@ class VersionBumpApplication {
         // If we have a temp ref, create the proper versioned branch name
         if (this.tempRef && this.branchTemplate) {
           // Get the final root package version to create the branch name
-          const { promises: fs } = await import('fs')
           const rootPkgContent = await fs.readFile('package.json', 'utf-8')
           const rootPkg = JSON.parse(rootPkgContent)
           const versionedBranch = interpolateTemplate(this.branchTemplate, {
@@ -245,7 +248,6 @@ class VersionBumpApplication {
 
       // Compare current version with latest tag
       const latestVersion = latestTag.replace(/^v/, '')
-      const semver = (await import('semver')).default
 
       if (semver.gt(currentVersion, latestVersion)) {
         // Current version is greater than latest tag

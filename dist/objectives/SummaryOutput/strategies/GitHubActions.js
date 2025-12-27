@@ -40,9 +40,12 @@ const core = __importStar(require("@actions/core"));
  * Generates rich markdown summaries for GitHub Actions environments.
  */
 class GitHubActions {
+    logger;
     name = 'github-actions';
     description = 'GitHub Actions markdown summary';
-    constructor(_config) { }
+    constructor(_config, logger) {
+        this.logger = logger;
+    }
     /**
      * Generate GitHub Actions summary with detailed tables.
      */
@@ -91,6 +94,52 @@ class GitHubActions {
         ]);
         // Add recommendations if any
         this.addRecommendations(results, config);
+        // Generate operational logging and notices
+        this.logResultsSummary(results, config);
+        this.generateNotices(results, config);
+    }
+    /**
+     * Log summary to console for debugging.
+     */
+    logResultsSummary(results, config) {
+        this.logger.startGroup('📊 Results Summary');
+        if (results.totalPackages > 0) {
+            this.logger.info(`✅ Processed ${results.totalPackages} packages:`);
+            this.logger.info(`   • ${results.releasePackages} release versions`);
+            this.logger.info(`   • ${results.prereleasePackages} prerelease versions`);
+            this.logger.info(`   • ${results.finalizedPackages} finalized versions`);
+            if (results.testFailures.length > 0) {
+                this.logger.warning(`⚠️  ${results.testFailures.length} packages failed tests: ${results.testFailures.join(', ')}`);
+            }
+        }
+        else {
+            this.logger.info(`ℹ️  No packages required version changes with strategy '${config.strategy}'`);
+        }
+        this.logger.endGroup();
+    }
+    /**
+     * Generate GitHub Actions notices based on results.
+     */
+    generateNotices(results, config) {
+        if (results.totalPackages > 0) {
+            const releaseCount = results.releasePackages;
+            const prereleaseCount = results.prereleasePackages;
+            if (releaseCount > 0 && prereleaseCount > 0) {
+                this.logger.notice(`🚀 Version bump completed: ${releaseCount} releases and ${prereleaseCount} prereleases created`);
+            }
+            else if (releaseCount > 0) {
+                this.logger.notice(`🚀 Version bump completed: ${releaseCount} release${releaseCount === 1 ? '' : 's'} created`);
+            }
+            else if (prereleaseCount > 0) {
+                this.logger.notice(`🧪 Version bump completed: ${prereleaseCount} prerelease${prereleaseCount === 1 ? '' : 's'} created`);
+            }
+            if (results.testFailures.length > 0) {
+                this.logger.warning(`⚠️ ${results.testFailures.length} package${results.testFailures.length === 1 ? '' : 's'} failed compatibility tests`);
+            }
+        }
+        else {
+            this.logger.notice(`ℹ️ No version changes needed with strategy '${config.strategy}'`);
+        }
     }
     /**
      * Add recommendations section to summary.

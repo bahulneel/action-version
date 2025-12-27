@@ -1,4 +1,3 @@
-import * as core from '@actions/core'
 import type {
   SummaryOutputGoals,
   SummaryOutputConfig,
@@ -6,6 +5,7 @@ import type {
   VersionBumpResults,
   StrategyOf,
 } from '@types'
+import type { LoggingAdapter } from '../../../adapters/Logging/LoggingAdapter.js'
 
 /**
  * Console summary strategy.
@@ -15,7 +15,10 @@ export class Console implements StrategyOf<SummaryOutputGoals> {
   readonly name = 'console'
   readonly description = 'Console-based summary output'
 
-  constructor(_config: SummaryOutputConfig) {}
+  constructor(
+    _config: SummaryOutputConfig,
+    private readonly logger: LoggingAdapter
+  ) {}
 
   /**
    * Generate console-based summary for non-GitHub Actions environments.
@@ -24,38 +27,106 @@ export class Console implements StrategyOf<SummaryOutputGoals> {
     results: VersionBumpResults,
     config: ActionConfiguration
   ): Promise<void> {
-    core.info('📦 Version Bump Summary')
-    core.info('='.repeat(50))
+    this.logger.info('📦 Version Bump Summary')
+    this.logger.info('='.repeat(50))
 
     if (results.totalPackages > 0) {
-      core.info('Package Changes:')
+      this.logger.info('Package Changes:')
       Object.entries(results.bumped).forEach(([name, result]) => {
         const status = results.testFailures.includes(name) ? '❌ Failed' : '✅ Success'
-        core.info(
+        this.logger.info(
           `  ${name}: ${result.version} (${this.formatBumpType(result.bumpType)}) - ${status}`
         )
       })
     } else {
-      core.info('✨ No packages required version changes.')
+      this.logger.info('✨ No packages required version changes.')
     }
 
-    core.info('\n⚙️ Configuration Used:')
-    core.info(`  Strategy: ${config.strategy}`)
-    core.info(`  Active Branch: ${config.activeBranch}`)
-    core.info(`  Base Branch: ${config.baseBranch || 'none (tag-based)'}`)
-    core.info(`  Tag Prereleases: ${config.tagPrereleases ? 'enabled' : 'disabled'}`)
-    core.info(`  Create Branch: ${config.shouldCreateBranch ? 'enabled' : 'disabled'}`)
-    core.info(`  Branch Cleanup: ${config.branchCleanup}`)
+    this.logger.info('\n⚙️ Configuration Used:')
+    this.logger.info(`  Strategy: ${config.strategy}`)
+    this.logger.info(`  Active Branch: ${config.activeBranch}`)
+    this.logger.info(`  Base Branch: ${config.baseBranch || 'none (tag-based)'}`)
+    this.logger.info(`  Tag Prereleases: ${config.tagPrereleases ? 'enabled' : 'disabled'}`)
+    this.logger.info(`  Create Branch: ${config.shouldCreateBranch ? 'enabled' : 'disabled'}`)
+    this.logger.info(`  Branch Cleanup: ${config.branchCleanup}`)
 
-    core.info('\n📊 Statistics:')
-    core.info(`  Total Packages Processed: ${results.totalPackages}`)
-    core.info(`  Release Versions: ${results.releasePackages}`)
-    core.info(`  Prerelease Versions: ${results.prereleasePackages}`)
-    core.info(`  Finalized Versions: ${results.finalizedPackages}`)
-    core.info(`  Test Failures: ${results.testFailures.length}`)
+    this.logger.info('\n📊 Statistics:')
+    this.logger.info(`  Total Packages Processed: ${results.totalPackages}`)
+    this.logger.info(`  Release Versions: ${results.releasePackages}`)
+    this.logger.info(`  Prerelease Versions: ${results.prereleasePackages}`)
+    this.logger.info(`  Finalized Versions: ${results.finalizedPackages}`)
+    this.logger.info(`  Test Failures: ${results.testFailures.length}`)
 
     // Add recommendations
     this.addConsoleRecommendations(results, config)
+
+    // Generate operational logging and notices
+    this.logResultsSummary(results, config)
+    this.generateNotices(results, config)
+  }
+
+  /**
+   * Log summary to console for debugging.
+   */
+  private logResultsSummary(results: VersionBumpResults, config: ActionConfiguration): void {
+    this.logger.startGroup('📊 Results Summary')
+
+    if (results.totalPackages > 0) {
+      this.logger.info(`✅ Processed ${results.totalPackages} packages:`)
+      this.logger.info(`   • ${results.releasePackages} release versions`)
+      this.logger.info(`   • ${results.prereleasePackages} prerelease versions`)
+      this.logger.info(`   • ${results.finalizedPackages} finalized versions`)
+
+      if (results.testFailures.length > 0) {
+        this.logger.warning(
+          `⚠️  ${results.testFailures.length} packages failed tests: ${results.testFailures.join(
+            ', '
+          )}`
+        )
+      }
+    } else {
+      this.logger.info(`ℹ️  No packages required version changes with strategy '${config.strategy}'`)
+    }
+
+    this.logger.endGroup()
+  }
+
+  /**
+   * Generate notices based on results.
+   */
+  private generateNotices(results: VersionBumpResults, config: ActionConfiguration): void {
+    if (results.totalPackages > 0) {
+      const releaseCount = results.releasePackages
+      const prereleaseCount = results.prereleasePackages
+
+      if (releaseCount > 0 && prereleaseCount > 0) {
+        this.logger.notice(
+          `🚀 Version bump completed: ${releaseCount} releases and ${prereleaseCount} prereleases created`
+        )
+      } else if (releaseCount > 0) {
+        this.logger.notice(
+          `🚀 Version bump completed: ${releaseCount} release${
+            releaseCount === 1 ? '' : 's'
+          } created`
+        )
+      } else if (prereleaseCount > 0) {
+        this.logger.notice(
+          `🧪 Version bump completed: ${prereleaseCount} prerelease${
+            prereleaseCount === 1 ? '' : 's'
+          } created`
+        )
+      }
+
+      if (results.testFailures.length > 0) {
+        this.logger.warning(
+          `⚠️ ${results.testFailures.length} package${
+            results.testFailures.length === 1 ? '' : 's'
+          } failed compatibility tests`
+        )
+      }
+    } else {
+      this.logger.notice(`ℹ️ No version changes needed with strategy '${config.strategy}'`)
+    }
   }
 
   /**
@@ -93,8 +164,8 @@ export class Console implements StrategyOf<SummaryOutputGoals> {
     }
 
     if (recommendations.length > 0) {
-      core.info('\n💡 Recommendations:')
-      recommendations.forEach((rec: string) => core.info(`  • ${rec}`))
+      this.logger.info('\n💡 Recommendations:')
+      recommendations.forEach((rec: string) => this.logger.info(`  • ${rec}`))
     }
   }
 

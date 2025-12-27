@@ -1,0 +1,1 @@
+{"version":3,"file":"objective.js","sourceRoot":"","sources":["../../../src/objectives/VersionBumping/objective.ts"],"names":[],"mappings":";;;AAEA,kFAA2E;AAO9D,QAAA,cAAc,GAAyD;IAClF,UAAU,CAAC,MAAM;QACf,yEAAyE;QACzE,OAAO,IAAI,8CAAoB,CAAC,MAAM,EAAE,MAAM,CAAC,WAAW,EAAE,MAAM,CAAC,cAAc,CAAC,CAAA;IACpF,CAAC;CACF,CAAA"}

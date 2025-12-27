@@ -1,5 +1,6 @@
 import * as core from '@actions/core'
 import type { ActionConfiguration } from '../types/index.js'
+import type { ConfigAdapter } from '../types/config.js'
 import { validateConfiguration } from '../utils/validation.js'
 
 /**
@@ -7,6 +8,8 @@ import { validateConfiguration } from '../utils/validation.js'
  * Handles GitHub Actions inputs and provides validated configuration objects.
  */
 export class ConfigurationService {
+  constructor(private readonly adapter: ConfigAdapter) {}
+
   /**
    * Parse configuration from GitHub Actions inputs.
    */
@@ -25,62 +28,43 @@ export class ConfigurationService {
    */
   private parseRawInputs(): Partial<ActionConfiguration> {
     const result: any = {
-      shouldCreateBranch: this.safeGetBooleanInput('create_branch', false),
-      tagPrereleases: this.safeGetBooleanInput('tag_prereleases', false),
+      shouldCreateBranch: this.adapter.readBoolean('create_branch') || false,
+      tagPrereleases: this.adapter.readBoolean('tag_prereleases') || false,
     }
 
-    const commitTemplate = core.getInput('commit_template')
+    const commitTemplate = this.adapter.readString('commit_template')
     if (commitTemplate) result.commitMsgTemplate = commitTemplate
 
-    const depCommitTemplate = core.getInput('dependency_commit_template')
+    const depCommitTemplate = this.adapter.readString('dependency_commit_template')
     if (depCommitTemplate) result.depCommitMsgTemplate = depCommitTemplate
 
-    const branchTemplate = core.getInput('branch_template')
+    const branchTemplate = this.adapter.readString('branch_template')
     if (branchTemplate) result.branchTemplate = branchTemplate
 
-    const branchCleanup = core.getInput('branch_cleanup')
+    const branchCleanup = this.adapter.readString('branch_cleanup')
     if (branchCleanup) result.branchCleanup = branchCleanup as any
 
-    const baseBranch = core.getInput('base')
+    const baseBranch = this.adapter.readString('base')
     if (baseBranch) result.baseBranch = baseBranch
 
-    const strategy = core.getInput('strategy')
+    const strategy = this.adapter.readString('strategy')
     if (strategy) result.strategy = strategy as any
 
-    const activeBranch = core.getInput('branch')
+    const activeBranch = this.adapter.readString('branch')
     if (activeBranch) result.activeBranch = activeBranch
 
     // Parse tactic-specific configuration
-    const mergebaseLookback = core.getInput('tactic_mergebase_lookbackcommits')
-    if (mergebaseLookback) {
-      const lookbackValue = parseInt(mergebaseLookback, 10)
-      if (!isNaN(lookbackValue)) {
-        result.mergebaseLookbackCommits = lookbackValue
-      }
+    const mergebaseLookback = this.adapter.readNumber('tactic_mergebase_lookbackcommits')
+    if (mergebaseLookback !== undefined) {
+      result.mergebaseLookbackCommits = mergebaseLookback
     }
 
-    const lastversioncommitMaxCount = core.getInput('tactic_lastversioncommit_maxcount')
-    if (lastversioncommitMaxCount) {
-      const maxCountValue = parseInt(lastversioncommitMaxCount, 10)
-      if (!isNaN(maxCountValue)) {
-        result.lastversioncommitMaxCount = maxCountValue
-      }
+    const lastversioncommitMaxCount = this.adapter.readNumber('tactic_lastversioncommit_maxcount')
+    if (lastversioncommitMaxCount !== undefined) {
+      result.lastversioncommitMaxCount = lastversioncommitMaxCount
     }
 
     return result
-  }
-
-  /**
-   * Safely parse boolean input with fallback to default.
-   */
-  private safeGetBooleanInput(input: string, defaultValue: boolean): boolean {
-    try {
-      const value = core.getInput(input)
-      if (!value) return defaultValue
-      return core.getBooleanInput(input)
-    } catch {
-      return defaultValue
-    }
   }
 
   /**

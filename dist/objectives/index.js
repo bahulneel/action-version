@@ -19,6 +19,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./Versioning/objective.js"), exports);
+__exportStar(require("./VersionBumping/objective.js"), exports);
 __exportStar(require("./ReferenceDiscovery/objective.js"), exports);
 __exportStar(require("./Vcs/objective.js"), exports);
 __exportStar(require("./CommitMessaging/objective.js"), exports);
