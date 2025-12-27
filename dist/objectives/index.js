@@ -25,4 +25,5 @@ __exportStar(require("./Vcs/objective.js"), exports);
 __exportStar(require("./CommitMessaging/objective.js"), exports);
 __exportStar(require("./SummaryOutput/objective.js"), exports);
 __exportStar(require("./PackageManagement/objective.js"), exports);
+__exportStar(require("./ModelInference/objective.js"), exports);
 //# sourceMappingURL=index.js.map

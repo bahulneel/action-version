@@ -1,0 +1,1 @@
+{"version":3,"file":"BranchProtection.d.ts","sourceRoot":"","sources":["../../../src/adapters/GitHub/BranchProtection.ts"],"names":[],"mappings":"AAQA;;;GAGG;AACH,qBAAa,gBAAgB;IAC3B;;;OAGG;IACG,iBAAiB,CAAC,UAAU,EAAE,MAAM,GAAG,OAAO,CAAC,OAAO,CAAC;IAsD7D;;OAEG;IACH,UAAU,IAAI,IAAI;CAGnB"}

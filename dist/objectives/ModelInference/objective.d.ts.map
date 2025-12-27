@@ -1,0 +1,1 @@
+{"version":3,"file":"objective.d.ts","sourceRoot":"","sources":["../../../src/objectives/ModelInference/objective.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,SAAS,EAAc,MAAM,sBAAsB,CAAA;AACjE,OAAO,KAAK,EAAE,mBAAmB,EAAE,MAAM,sCAAsC,CAAA;AAG/E;;;GAGG;AACH,MAAM,WAAW,oBAAoB;CAEpC;AAED,eAAO,MAAM,cAAc,EAAE,SAAS,CAAC,oBAAoB,EAAE,mBAAmB,CAK/E,CAAA"}

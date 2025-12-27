@@ -27,7 +27,7 @@ function validateConfiguration(config) {
     const errors = [];
     // Validate strategy
     if (config.strategy && !(0, guards_js_1.isStrategyName)(config.strategy)) {
-        errors.push(new ConfigurationValidationError(`Invalid strategy: ${config.strategy}. Must be one of: do-nothing, apply-bump, pre-release`, 'strategy', config.strategy));
+        errors.push(new ConfigurationValidationError(`Invalid strategy: ${config.strategy}. Must be one of: do-nothing, apply-bump, pre-release, finalize, sync`, 'strategy', config.strategy));
     }
     // Validate branch cleanup strategy
     if (config.branchCleanup && !(0, guards_js_1.isBranchCleanupStrategy)(config.branchCleanup)) {

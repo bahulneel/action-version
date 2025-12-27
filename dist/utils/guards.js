@@ -9,7 +9,7 @@ function isBumpType(value) {
     return ['major', 'minor', 'patch', 'prerelease', 'release'].includes(value);
 }
 function isStrategyName(value) {
-    return ['do-nothing', 'apply-bump', 'pre-release'].includes(value);
+    return ['do-nothing', 'apply-bump', 'pre-release', 'finalize', 'sync'].includes(value);
 }
 function isBranchCleanupStrategy(value) {
     return ['keep', 'prune', 'semantic'].includes(value);

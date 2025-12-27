@@ -19,6 +19,15 @@ export declare class WorkspaceVersionBump implements StrategyOf<VersionBumpingGo
      */
     private finalizePackageVersions;
     /**
+     * Sync package versions from source branch to target branch.
+     * Copies exact versions without any calculations.
+     */
+    private syncPackageVersions;
+    /**
+     * Read package versions from a specific branch.
+     */
+    private readVersionsFromBranch;
+    /**
      * Process normal version bumps based on conventional commits.
      */
     private processNormalVersionBumps;

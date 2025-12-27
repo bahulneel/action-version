@@ -9,4 +9,5 @@ export * from './Vcs/objective.js';
 export * from './CommitMessaging/objective.js';
 export * from './SummaryOutput/objective.js';
 export * from './PackageManagement/objective.js';
+export * from './ModelInference/objective.js';
 //# sourceMappingURL=index.d.ts.map

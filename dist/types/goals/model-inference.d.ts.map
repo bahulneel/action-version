@@ -1,0 +1,1 @@
+{"version":3,"file":"model-inference.d.ts","sourceRoot":"","sources":["../../../src/types/goals/model-inference.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,UAAU,EAAE,gBAAgB,IAAI,qBAAqB,EAAE,MAAM,yBAAyB,CAAA;AAEpG;;GAEG;AACH,MAAM,WAAW,mBAAmB;IAClC;;OAEG;IACH,WAAW,IAAI,OAAO,CAAC,UAAU,CAAC,CAAA;IAElC;;OAEG;IACH,sBAAsB,CAAC,MAAM,EAAE,UAAU,GAAG,OAAO,CAAC,qBAAqB,CAAC,CAAA;CAC3E"}
