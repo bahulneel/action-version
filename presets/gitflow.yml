@@ -1,0 +1,40 @@
+# Git Flow preset
+# Provides flows and branch metadata for Git Flow branching model
+
+flows:
+  # Flow: Prepare a release by finalizing prerelease version
+  - name: release-prep
+    from: develop
+    to: release/*
+    triggered: true
+    versioning: finalize
+
+  # Flow: Merge release branch to main (release)
+  - name: release
+    from: release/*
+    to: main
+    # No versioning - just merge (version already finalized)
+
+  # Flow: Sync exact version from main back to develop after release
+  - name: sync-version
+    from: main
+    to: develop
+    # No versioning - sync exact version (do-nothing unless there are new commits)
+
+  # Flow: Bump version with prerelease for active development
+  - name: bump-version
+    from: '*'
+    from-exclude:
+      - main
+      - release/*
+    versioning: pre-release
+    base: main
+
+branches:
+  main:
+    tags: true
+    protected: true
+  develop:
+    protected: false
+  release/*:
+    protected: true

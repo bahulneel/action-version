@@ -11,7 +11,7 @@ export function isBumpType(value: string): value is BumpType {
 }
 
 export function isStrategyName(value: string): value is StrategyName {
-  return ['do-nothing', 'apply-bump', 'pre-release'].includes(value)
+  return ['do-nothing', 'apply-bump', 'pre-release', 'finalize', 'sync'].includes(value)
 }
 
 export function isBranchCleanupStrategy(value: string): value is BranchCleanupStrategyType {

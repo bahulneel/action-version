@@ -1,7 +1,7 @@
 // Core domain types and shared utility types
 
 export type BumpType = 'major' | 'minor' | 'patch' | 'prerelease' | 'release'
-export type StrategyName = 'do-nothing' | 'apply-bump' | 'pre-release'
+export type StrategyName = 'do-nothing' | 'apply-bump' | 'pre-release' | 'finalize' | 'sync'
 export type BranchCleanupStrategyType = 'keep' | 'prune' | 'semantic'
 export type GitOperationStrategyType = 'conventional' | 'simple'
 export type PackageManagerType = 'npm' | 'yarn' | 'pnpm'

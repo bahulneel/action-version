@@ -2,6 +2,8 @@ import * as core from '@actions/core'
 import * as path from 'path'
 import { promises as fs } from 'fs'
 import simpleGit from 'simple-git'
+
+const git = simpleGit()
 import type {
   ActionConfiguration,
   PackageJson,
@@ -45,10 +47,15 @@ export class WorkspaceVersionBump implements StrategyOf<VersionBumpingGoals> {
 
     let results: VersionBumpResults
 
-    // Handle prerelease finalization or normal processing
-    if (referencePoint.shouldFinalizeVersions) {
+    // Handle different strategies
+    if (config.strategy === 'finalize' || referencePoint.shouldFinalizeVersions) {
+      // Finalize strategy: convert prerelease to stable
       results = await this.finalizePackageVersions(packages, rootPkg, config)
+    } else if (config.strategy === 'sync') {
+      // Sync strategy: copy exact version from source branch
+      results = await this.syncPackageVersions(packages, rootPkg, config, referencePoint)
     } else {
+      // Normal version bump processing (do-nothing, apply-bump, pre-release)
       results = await this.processNormalVersionBumps(packages, rootPkg, referencePoint, config)
     }
 
@@ -112,6 +119,162 @@ export class WorkspaceVersionBump implements StrategyOf<VersionBumpingGoals> {
       testFailures: [],
       ...stats,
       hasBumped,
+    }
+  }
+
+  /**
+   * Sync package versions from source branch to target branch.
+   * Copies exact versions without any calculations.
+   */
+  private async syncPackageVersions(
+    packages: Package[],
+    rootPkg: PackageJson,
+    config: ActionConfiguration,
+    _referencePoint: ReferencePointResult
+  ): Promise<VersionBumpResults> {
+    const bumped: Record<string, BumpResult> = {}
+    let hasBumped = false
+
+    core.info('🔄 Syncing versions from source branch (exact copy)')
+
+    if (!config.baseBranch) {
+      core.warning('Sync strategy requires baseBranch to be specified, skipping sync')
+      return {
+        bumped: {},
+        testFailures: [],
+        totalPackages: 0,
+        releasePackages: 0,
+        prereleasePackages: 0,
+        finalizedPackages: 0,
+        hasBumped: false,
+      }
+    }
+
+    // Read versions from source branch (baseBranch)
+    const sourceVersions = await this.readVersionsFromBranch(config.baseBranch, packages, rootPkg)
+
+    if (!sourceVersions) {
+      core.warning(`Failed to read versions from source branch ${config.baseBranch}, skipping sync`)
+      return {
+        bumped: {},
+        testFailures: [],
+        totalPackages: 0,
+        releasePackages: 0,
+        prereleasePackages: 0,
+        finalizedPackages: 0,
+        hasBumped: false,
+      }
+    }
+
+    // Sync workspace packages
+    for (const pkg of packages) {
+      const sourceVersion = sourceVersions.packages[pkg.name]
+      if (sourceVersion && sourceVersion !== pkg.version) {
+        core.info(`[${pkg.name}] Syncing version: ${pkg.version} → ${sourceVersion}`)
+
+        pkg.version = sourceVersion
+        await pkg.save()
+
+        await this.gitStrategy.commitVersionChange(
+          pkg.dir,
+          pkg.name,
+          sourceVersion,
+          'patch', // Sync is always patch-level change
+          config.commitMsgTemplate
+        )
+
+        bumped[pkg.name] = {
+          version: sourceVersion,
+          bumpType: 'patch',
+          sha: null,
+        }
+        hasBumped = true
+      }
+    }
+
+    // Sync root package
+    if (sourceVersions.root && sourceVersions.root !== rootPkg.version) {
+      core.info(`[root] Syncing version: ${rootPkg.version} → ${sourceVersions.root}`)
+
+      rootPkg.version = sourceVersions.root
+      await this.saveRootPackage(rootPkg)
+
+      await this.gitStrategy.commitVersionChange(
+        process.cwd(),
+        rootPkg.name || 'root',
+        sourceVersions.root,
+        'patch',
+        config.commitMsgTemplate
+      )
+
+      bumped[rootPkg.name || 'root'] = {
+        version: sourceVersions.root,
+        bumpType: 'patch',
+        sha: null,
+      }
+      hasBumped = true
+    }
+
+    // Update dependencies if any packages were synced
+    if (hasBumped) {
+      await this.updateDependencies(packages, bumped, config, [])
+    }
+
+    const stats = this.calculateStats(bumped)
+
+    return {
+      bumped,
+      testFailures: [],
+      ...stats,
+      hasBumped,
+    }
+  }
+
+  /**
+   * Read package versions from a specific branch.
+   */
+  private async readVersionsFromBranch(
+    branchName: string,
+    packages: Package[],
+    rootPkg: PackageJson
+  ): Promise<{ packages: Record<string, string>; root: string } | null> {
+    try {
+      const versions: Record<string, string> = {}
+
+      // Read versions for workspace packages
+      for (const pkg of packages) {
+        try {
+          const packageJsonContent = await git.show([
+            `${branchName}:${pkg.relativePath}/package.json`,
+          ])
+          const packageJson = JSON.parse(packageJsonContent)
+          if (packageJson.version) {
+            versions[pkg.name] = packageJson.version
+          }
+        } catch (error) {
+          core.debug(`Failed to read version for ${pkg.name} from ${branchName}: ${error}`)
+        }
+      }
+
+      // Read root package version
+      let rootVersion = rootPkg.version
+      try {
+        const rootPackageJsonContent = await git.show([`${branchName}:package.json`])
+        const rootPackageJson = JSON.parse(rootPackageJsonContent)
+        if (rootPackageJson.version) {
+          rootVersion = rootPackageJson.version
+        }
+      } catch (error) {
+        core.debug(`Failed to read root package version from ${branchName}: ${error}`)
+      }
+
+      return {
+        packages: versions,
+        root: rootVersion,
+      }
+    } catch (error) {
+      core.warning(`Failed to read versions from branch ${branchName}: ${error}`)
+      return null
     }
   }
 

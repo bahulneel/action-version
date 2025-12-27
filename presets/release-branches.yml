@@ -1,0 +1,23 @@
+# Release Branches preset
+# Provides flows and branch metadata for Release Branch pattern
+
+flows:
+  # Flow: Create release branch from main
+  - name: release-prep
+    from: main
+    to: release/*
+    triggered: true
+    versioning: finalize
+
+  # Flow: Merge release branch back to main
+  - name: release
+    from: release/*
+    to: main
+    # No versioning - version already finalized
+
+branches:
+  main:
+    tags: true
+    protected: true
+  release/*:
+    protected: true

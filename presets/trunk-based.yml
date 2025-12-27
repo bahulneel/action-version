@@ -1,0 +1,14 @@
+# Trunk-Based Development preset
+# Provides flows and branch metadata for Trunk-Based Development model
+
+flows:
+  # Flow: Bump version directly on main (no feature branches)
+  - name: bump-version
+    from: main
+    versioning: pre-release
+    base: main
+
+branches:
+  main:
+    tags: true
+    protected: true

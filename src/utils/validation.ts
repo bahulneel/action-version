@@ -28,7 +28,7 @@ export function validateConfiguration(config: Partial<ActionConfiguration>): Act
   // Validate strategy
   if (config.strategy && !isStrategyName(config.strategy)) {
     errors.push(new ConfigurationValidationError(
-      `Invalid strategy: ${config.strategy}. Must be one of: do-nothing, apply-bump, pre-release`,
+      `Invalid strategy: ${config.strategy}. Must be one of: do-nothing, apply-bump, pre-release, finalize, sync`,
       'strategy',
       config.strategy
     ));

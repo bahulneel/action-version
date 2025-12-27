@@ -71,6 +71,69 @@ jobs:
 
 ## ⚙️ Configuration
 
+The action supports two configuration approaches:
+
+1. **Model-Driven Configuration** (Recommended): Define your branching model in a `.versioning.yml` file
+2. **Behavior-Driven Configuration**: Specify low-level details via workflow inputs
+
+### Model-Driven Configuration
+
+Create a `.versioning.yml` file in your repository root to define your branching model. The action will automatically detect and use this configuration.
+
+**Simple Example (using presets):**
+
+```yaml
+# .versioning.yml
+presets:
+  - gitflow
+```
+
+**Advanced Example (custom flows):**
+
+```yaml
+# .versioning.yml
+presets:
+  - gitflow
+
+branches:
+  develop:
+    protected: true # Override preset: make develop protected
+
+flows:
+  - name: custom-flow
+    from: feature/*
+    to: develop
+    versioning: pre-release
+    base: main
+```
+
+**Available Presets:**
+
+- `gitflow` - Git Flow pattern (develop, release/\*, main)
+- `github-flow` - GitHub Flow pattern
+- `trunk-based` - Trunk-Based Development
+- `release-branches` - Release Branch pattern
+- `gitlab-flow` - GitLab Flow (environment-based)
+
+**Flow Configuration:**
+
+- `name` - Flow identifier
+- `from` - Source branch pattern (supports globs: `release/*`, `*`)
+- `to` - Target branch pattern
+- `versioning` - Strategy: `pre-release` or `finalize`
+- `base` - Base branch for comparison (optional)
+- `from-exclude` - Branches to exclude from `from` pattern
+- `triggered` - Whether flow is explicitly triggered
+
+**Branch Metadata:**
+
+- `protected` - Whether branch is protected (requires PRs)
+- `tags` - Whether to create git tags for releases
+
+See [ADR-001](./docs/adrs/0001-model-driven-configuration.md) for detailed documentation.
+
+### Behavior-Driven Configuration (Legacy)
+
 ### Inputs
 
 | Input                               | Description                                                         | Default                                                                    | Required |

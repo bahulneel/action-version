@@ -1,0 +1,24 @@
+# GitHub Flow preset
+# Provides flows and branch metadata for GitHub Flow branching model
+
+flows:
+  # Flow: Bump version on feature branches (trunk-based with branches)
+  - name: bump-version
+    from: '*'
+    from-exclude:
+      - main
+    versioning: pre-release
+    base: main
+
+  # Flow: Release to main
+  - name: release
+    from: '*'
+    from-exclude:
+      - main
+    to: main
+    # Versioning handled in bump-version flow above
+
+branches:
+  main:
+    tags: true
+    protected: true
