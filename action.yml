@@ -42,6 +42,10 @@ inputs:
     description: Create git tags for prerelease versions.
     required: false
     default: "false"
+  release:
+    description: "Release mode: Create a release branch by finalizing prerelease versions. When true, bypasses flow matching and forces: strategy=finalize, create_branch=true, branch_template=release/${version}. Use this for manual release creation."
+    required: false
+    default: "false"
   # Tactic-specific configuration
   tactic_mergebase_lookbackcommits:
     description: Number of commits to look back when finding merge base (MergeBase tactic). Must be a positive integer. Default 10 to handle merge commits.

@@ -13,6 +13,7 @@ flows:
   - name: release
     from: release/*
     to: main
+    tags: true # Create git tags when release is merged to main
     # No versioning - just merge (version already finalized)
 
   # Flow: Sync exact version from main back to develop after release
@@ -32,7 +33,6 @@ flows:
 
 branches:
   main:
-    tags: true
     protected: true
   develop:
     protected: false

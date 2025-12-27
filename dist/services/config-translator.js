@@ -58,7 +58,16 @@ class ConfigTranslator {
         // Step 2: Extract versioning strategy from flow
         const strategy = this.extractStrategy(matchedFlow);
         // Step 3: Extract base branch
-        const baseBranch = matchedFlow.base || 'main';
+        // For sync flows (no versioning), use 'from' as the source branch
+        // For other flows, use 'base' field or default to 'main'
+        let baseBranch;
+        if (!matchedFlow.versioning && matchedFlow.from && matchedFlow.to) {
+            // This is a sync flow: current branch is 'to', source is 'from'
+            baseBranch = matchedFlow.from;
+        }
+        else {
+            baseBranch = matchedFlow.base || 'main';
+        }
         // Step 4: Determine create_branch from branch protection
         // Use target branch from flow if available, otherwise use current branch
         const targetBranch = matchedFlow.to || gitHubContext.currentBranch;
@@ -89,7 +98,12 @@ class ConfigTranslator {
      */
     extractStrategy(flow) {
         if (!flow.versioning) {
-            // No versioning specified means do-nothing (for sync operations)
+            // No versioning specified: check if this is a sync flow
+            // Sync flows have both 'from' and 'to' specified (syncing from source to target)
+            if (flow.from && flow.to) {
+                return 'sync';
+            }
+            // Otherwise, use do-nothing
             return 'do-nothing';
         }
         switch (flow.versioning) {

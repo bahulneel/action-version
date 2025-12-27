@@ -203,7 +203,9 @@ class WorkspaceVersionBump {
             // Read versions for workspace packages
             for (const pkg of packages) {
                 try {
-                    const packageJsonContent = await git.show([`${branchName}:${pkg.relativePath}/package.json`]);
+                    const packageJsonContent = await git.show([
+                        `${branchName}:${pkg.relativePath}/package.json`,
+                    ]);
                     const packageJson = JSON.parse(packageJsonContent);
                     if (packageJson.version) {
                         versions[pkg.name] = packageJson.version;

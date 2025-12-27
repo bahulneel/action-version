@@ -13,13 +13,17 @@ import type {
   StrategyOf,
 } from '@types'
 import type { VersionBumpingGoals } from '../../../types/goals/version-bumping.js'
+import type { VcsGoals } from '../../../types/goals/vcs.js'
+import type { PackageManagementGoals } from '../../../types/goals/package-management.js'
 import { Package } from '../../../domain/package.js'
 import { calculateBumpType, finalizeVersion } from '../../../utils/version.js'
 import { getMostSignificantBumpType } from '../../../utils/version.js'
 import { getMostSignificantBump } from '../../../utils/commits.js'
+import { vcsObjective } from '../../Vcs/objective.js'
+import { packageManagement } from '../../PackageManagement/objective.js'
 import { versioning, commitMessaging } from '../../index.js'
 import { BumpType } from '../../../types/index.js'
-import type { VersionBumpResults } from '../../../services/version-bump.js'
+import type { VersionBumpResults } from '../../../types/core.js'
 
 /**
  * Workspace version bump strategy.
@@ -29,11 +33,15 @@ export class WorkspaceVersionBump implements StrategyOf<VersionBumpingGoals> {
   readonly name = 'workspace-version-bump'
   readonly description = 'Workspace-wide version bumping strategy'
 
-  constructor(
-    private readonly config: ActionConfiguration,
-    private readonly gitStrategy: StrategyOf<import('@types').VcsGoals>,
-    private readonly packageManager: StrategyOf<import('@types').PackageManagementGoals>
-  ) {}
+  // Goals resolved in constructor (initialization)
+  private readonly vcs: VcsGoals
+  private readonly packageManagementGoals: PackageManagementGoals
+
+  constructor(private readonly config: ActionConfiguration) {
+    // Resolve sub-objective goals in constructor (initialization)
+    this.vcs = vcsObjective.strategise(config)
+    this.packageManagementGoals = packageManagement.strategise(config)
+  }
 
   public async processWorkspace(
     packages: Package[],
@@ -77,7 +85,7 @@ export class WorkspaceVersionBump implements StrategyOf<VersionBumpingGoals> {
 
     // Finalize workspace packages
     for (const pkg of packages) {
-      const result = await pkg.finalizePrerelease(config.commitMsgTemplate, this.gitStrategy)
+      const result = await pkg.finalizePrerelease(config.commitMsgTemplate, this.vcs)
 
       if (result) {
         bumped[pkg.name] = result
@@ -93,7 +101,7 @@ export class WorkspaceVersionBump implements StrategyOf<VersionBumpingGoals> {
       rootPkg.version = finalVersion
       await this.saveRootPackage(rootPkg)
 
-      await this.gitStrategy.commitVersionChange(
+      await this.vcs.commitVersionChange(
         process.cwd(),
         rootPkg.name || 'root',
         finalVersion,
@@ -109,7 +117,7 @@ export class WorkspaceVersionBump implements StrategyOf<VersionBumpingGoals> {
       hasBumped = true
 
       // Create release tags for finalized versions
-      await this.gitStrategy.tagVersion(finalVersion, false, true)
+      await this.vcs.tagVersion(finalVersion, false, true)
     }
 
     const stats = this.calculateStats(bumped)
@@ -175,7 +183,7 @@ export class WorkspaceVersionBump implements StrategyOf<VersionBumpingGoals> {
         pkg.version = sourceVersion
         await pkg.save()
 
-        await this.gitStrategy.commitVersionChange(
+        await this.vcs.commitVersionChange(
           pkg.dir,
           pkg.name,
           sourceVersion,
@@ -199,7 +207,7 @@ export class WorkspaceVersionBump implements StrategyOf<VersionBumpingGoals> {
       rootPkg.version = sourceVersions.root
       await this.saveRootPackage(rootPkg)
 
-      await this.gitStrategy.commitVersionChange(
+      await this.vcs.commitVersionChange(
         process.cwd(),
         rootPkg.name || 'root',
         sourceVersions.root,
@@ -329,7 +337,7 @@ export class WorkspaceVersionBump implements StrategyOf<VersionBumpingGoals> {
         referencePoint.referenceVersion,
         config.strategy,
         config.commitMsgTemplate,
-        this.gitStrategy,
+          this.vcs,
         referencePoint.shouldForceBump
       )
 
@@ -367,12 +375,12 @@ export class WorkspaceVersionBump implements StrategyOf<VersionBumpingGoals> {
           pkg.name,
           pkg.version,
           config.depCommitMsgTemplate,
-          this.gitStrategy
+          this.vcs
         )
 
         // Test compatibility for major version bumps
         if (updated && bumped[pkg.name]!.bumpType === 'major') {
-          const testResult = await siblingPkg.testCompatibility(this.packageManager)
+          const testResult = await siblingPkg.testCompatibility(this.packageManagementGoals)
 
           if (!testResult.success) {
             core.warning(`🧪 Tests failed for ${siblingPkg.name} after major bump of ${pkg.name}`)
@@ -439,7 +447,7 @@ export class WorkspaceVersionBump implements StrategyOf<VersionBumpingGoals> {
     await this.saveRootPackage(rootPkg)
 
     // Commit the version change
-    await this.gitStrategy.commitVersionChange(
+    await this.vcs.commitVersionChange(
       process.cwd(),
       rootPkg.name || 'root',
       nextVersion,

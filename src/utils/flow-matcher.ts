@@ -102,8 +102,20 @@ export function matchFlow(flows: Flow[], context: GitHubContext): Flow | null {
   const matchingFlows: Array<{ flow: Flow; score: number }> = []
 
   for (const flow of flows) {
+    let shouldMatch = false
+
     // Check if current branch matches the 'from' pattern (with exclusions)
     if (matchesPatternWithExclusions(flow.from, context.currentBranch, flow['from-exclude'])) {
+      shouldMatch = true
+    }
+
+    // Also check if current branch matches the 'to' pattern (for sync flows)
+    // This allows matching sync-version flow when on the target branch
+    if (flow.to && matchesPatternWithExclusions(flow.to, context.currentBranch, [])) {
+      shouldMatch = true
+    }
+
+    if (shouldMatch) {
       // Check triggered status if specified
       if (flow.triggered !== undefined) {
         // If triggered is true, only match on explicit triggers (for now, we match all)

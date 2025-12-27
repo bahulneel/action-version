@@ -15,6 +15,9 @@ export interface ActionConfiguration {
   readonly tagPrereleases: boolean
   readonly mergebaseLookbackCommits?: number
   readonly lastversioncommitMaxCount?: number
+  /** Release mode flag - when true, bypasses flow matching and forces release branch creation */
+  readonly release?: boolean
 }
+
 
 

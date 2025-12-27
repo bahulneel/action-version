@@ -1,16 +1,13 @@
 import 'source-map-support/register'
 import * as core from '@actions/core'
 import { promises as fs } from 'fs'
-import semver from 'semver'
-import type { ActionConfiguration, StrategyOf, VcsGoals, PackageManagementGoals } from '@types'
+import type { ActionConfiguration } from '@types'
 import { findRootPackage, createWorkspacePackages } from './utils/workspace.js'
 import { ConfigurationService } from './services/configuration.js'
-import { VersionBumpService } from './services/version-bump.js'
-import { SummaryService } from './services/summary.js'
 import { SimpleGit } from './adapters/Git/SimpleGit.js'
 import { GitHubActions as GitHubActionsConfigAdapter } from './adapters/Config/GitHubActions.js'
 import { interpolateTemplate } from './utils/template.js'
-import { vcsObjective, packageManagement } from './objectives/index.js'
+import { main as mainObjective } from './objectives/Main/objective.js'
 
 /**
  * Main application class that orchestrates the version bump process.
@@ -37,69 +34,33 @@ class VersionBumpApplication {
         `📋 Configuration loaded: strategy=${config.strategy}, base=${config.baseBranch || 'none'}`
       )
 
-      // Step 2: Setup VCS via objective (delegates to legacy strategy)
-      const vcs = vcsObjective.strategise(config)
-      const gitSetup = await vcs.setup({
-        shouldCreateBranch: config.shouldCreateBranch,
-        branchTemplate: config.branchTemplate,
-      })
-      this.tempRef = gitSetup.tempRef
-      this.branchTemplate = gitSetup.branchTemplate
-
-      // Step 3: Load root package and initialize services
+      // Step 2: Load root package and discover packages
       const { pkg: rootPkg } = await findRootPackage()
-      const packageManager = packageManagement.strategise(
-        config
-      ) as StrategyOf<PackageManagementGoals>
-      const gitStrategy = vcs as StrategyOf<VcsGoals>
-
-      core.info(`📦 Package manager: ${packageManager.name}`)
-      core.info(`🔧 Git strategy: ${gitStrategy.name}`)
-
-      // Step 4: Initialize services
-      const versionBumpService = new VersionBumpService(gitStrategy, packageManager, config)
-      const summaryService = new SummaryService(config)
-
-      // Step 5: Discover and process packages
       const packages = await createWorkspacePackages(rootPkg)
       core.info(`📁 Discovered ${packages.length} packages`)
 
-      // Step 6: Execute version bump process
-      const results = await versionBumpService.processWorkspace(packages, rootPkg, config)
+      // Step 3: Execute main action using Main objective
+      const actionStrategy = mainObjective.strategise(config)
+      const actionResult = await actionStrategy.performAction({
+        packages,
+        rootPkg,
+      })
 
-      this.hasBumped = results.hasBumped
+      this.hasBumped = actionResult.results.hasBumped
+      this.tempRef = actionResult.gitSetup.tempRef
+      this.branchTemplate = actionResult.gitSetup.branchTemplate
 
-      // Step 7: Create tag for root package if version is greater than latest tag and we're not branching
-      if (!config.shouldCreateBranch) {
-        const rootPackageName = rootPkg.name || 'root'
-        const currentVersion = results.bumped[rootPackageName]?.version || rootPkg.version
-        const isPrerelease = currentVersion.includes('-')
-
-        // Only tag if this is a new version (greater than latest tag)
-        const shouldTag = await this.shouldCreateTag(
-          currentVersion,
-          isPrerelease,
-          config.tagPrereleases
-        )
-        if (shouldTag) {
-          await gitStrategy.tagVersion(currentVersion, isPrerelease, true)
-        }
-      }
-
-      // Step 8: Generate comprehensive summary
-      await summaryService.generateSummary(results, config)
-
-      // Step 9: Handle success
+      // Step 4: Handle success
       if (this.hasBumped) {
-        core.info('✅ Version bump action completed successfully with changes')
-        core.notice(`Version bump completed: ${results.totalPackages} packages updated`)
+        core.info('✅ Action completed successfully with changes')
+        core.notice(`Action completed: ${actionResult.results.totalPackages} packages updated`)
       } else {
-        core.info('✅ Version bump action completed successfully with no changes needed')
+        core.info('✅ Action completed successfully with no changes needed')
         core.notice(`No version changes needed with strategy '${config.strategy}'`)
       }
 
       // Set outputs for GitHub Actions
-      this.setActionOutputs(results, config)
+      this.setActionOutputs(actionResult.results, config)
     } catch (error) {
       this.handleError(error)
     } finally {
@@ -226,39 +187,6 @@ class VersionBumpApplication {
     core.exportVariable('VERSION_BUMP_PACKAGES_UPDATED', results.totalPackages)
     core.exportVariable('VERSION_BUMP_CHANGES_MADE', this.hasBumped)
     core.exportVariable('VERSION_BUMP_STRATEGY', config.strategy)
-  }
-
-  /**
-   * Determine if we should create a tag for the current version.
-   */
-  private async shouldCreateTag(
-    currentVersion: string,
-    isPrerelease: boolean,
-    tagPrereleases: boolean
-  ): Promise<boolean> {
-    try {
-      // Get latest tag
-      const tags = await this.git.tags(['--sort=-v:refname'])
-      const latestTag = tags.latest
-
-      if (!latestTag) {
-        // No tags exist, so this is the first version
-        return !isPrerelease || tagPrereleases
-      }
-
-      // Compare current version with latest tag
-      const latestVersion = latestTag.replace(/^v/, '')
-
-      if (semver.gt(currentVersion, latestVersion)) {
-        // Current version is greater than latest tag
-        return !isPrerelease || tagPrereleases
-      }
-
-      return false
-    } catch (error) {
-      core.warning(`Failed to check if should create tag: ${error}`)
-      return false
-    }
   }
 }
 

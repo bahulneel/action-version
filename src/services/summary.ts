@@ -1,5 +1,5 @@
 import type { ActionConfiguration } from '@types'
-import type { VersionBumpResults } from './version-bump.js'
+import type { VersionBumpResults } from '../types/core.js'
 import { summaryOutput } from '../objectives/index.js'
 
 /**

@@ -37,6 +37,9 @@ export interface Flow {
 
   /** Branches to exclude from the 'from' pattern (when using wildcards) */
   'from-exclude'?: string[]
+
+  /** Whether to create git tags when this flow executes */
+  tags?: boolean
 }
 
 /**

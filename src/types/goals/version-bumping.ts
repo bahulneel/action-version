@@ -1,6 +1,6 @@
 import type { PackageJson } from '../index.js'
 import type { Package } from '../../domain/package.js'
-import type { VersionBumpResults } from '../../services/version-bump.js'
+import type { VersionBumpResults } from '../core.js'
 import type { ActionConfiguration, ReferencePointResult } from '../index.js'
 
 /**
